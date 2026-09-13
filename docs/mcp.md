@@ -37,7 +37,7 @@ setup or migration windows.
 
 | Group | Examples |
 | --- | --- |
-| Discovery | `hrms_list_doctypes`, `frappe_get_creation_plan`, `frappe_get_doctype_schema`, `frappe_get_link_options` |
+| Discovery | `hrms_list_doctypes`, `frappe_get_api_catalog`, `frappe_get_creation_plan`, `frappe_get_doctype_schema`, `frappe_get_link_options` |
 | Documents | `frappe_list_documents`, `frappe_get_document`, `frappe_create_document`, `frappe_update_document` |
 | Workflow | `frappe_submit_document`, `frappe_cancel_document`, `frappe_get_document_history` |
 | Leave | `hrms_find_employee`, `hrms_get_leave_balance`, `hrms_apply_leave` |
@@ -78,6 +78,14 @@ Currency, Account, or approver silently. It must ask the user to choose among
 multiple current values, and stop with an actionable prerequisite message when
 no valid value exists. The live installed schema is authoritative because field
 requirements vary across Frappe HRMS versions.
+
+For broader API orientation, call `frappe_get_api_catalog`. It returns an
+OpenAPI-style JSON catalog generated from the connected Frappe instance,
+including generic REST operations, the selected DocType schema, Link targets,
+child-table relationships, Select options, and the follow-up MCP operation to
+resolve each relationship. The catalog is for navigation and planning;
+`frappe_get_creation_plan` remains mandatory immediately before a mutation
+because current records, permissions, and prerequisites can change.
 
 The curated workflow guidance is based on the official Frappe HR documentation
 and public HRMS DocType definitions, including:

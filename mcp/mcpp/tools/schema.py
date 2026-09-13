@@ -20,6 +20,24 @@ class SchemaInput(BaseModel):
 	doctype: str = Field(..., description="Exact Frappe DocType name, e.g. 'Employee', 'Leave Application'")
 
 
+class ApiCatalogInput(BaseModel):
+	model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+	doctype: Optional[str] = Field(
+		default=None,
+		description="Optional exact DocType. If omitted, return the generic Frappe REST catalog.",
+	)
+	include_link_schemas: bool = Field(
+		default=True,
+		description="Include one-level schemas for Link targets and child-table DocTypes.",
+	)
+	max_link_schemas: int = Field(
+		default=12,
+		ge=0,
+		le=30,
+		description="Maximum related Link or child DocType schemas to include.",
+	)
+
+
 class CreationPlanInput(BaseModel):
 	model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 	doctype: str = Field(

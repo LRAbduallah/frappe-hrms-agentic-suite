@@ -7,11 +7,157 @@ from typing import Callable, Optional
 
 from mcpp.client import FrappeClient
 from mcpp.doctypes import HR_DOCTYPES, format_registry_markdown, get_creation_guidance
-from mcpp.tools.schema import CreationPlanInput, LinkOptionsInput, ListDoctypesInput, SchemaInput
+from mcpp.tools.schema import (
+    ApiCatalogInput,
+    CreationPlanInput,
+    LinkOptionsInput,
+    ListDoctypesInput,
+    SchemaInput,
+)
 
 
 def register_discovery_tools(mcp, client: FrappeClient, err: Callable[[Exception], str]) -> None:
     """Register discovery and schema introspection tools."""
+
+    @mcp.tool(
+        name="frappe_get_api_catalog",
+        annotations={
+            "title": "Get Live Frappe API Catalog",
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": True,
+        },
+    )
+    async def frappe_get_api_catalog(params: Optional[ApiCatalogInput] = None) -> str:
+        """Return an OpenAPI-style catalog generated from the installed Frappe instance.
+
+        The catalog documents generic REST operations and, when a DocType is supplied,
+        its live fields, Link targets, child tables, and linked lookup operations.
+        Use this to understand the available API shape; use frappe_get_creation_plan
+        immediately before a write for current values and prerequisites.
+        """
+        request = params or ApiCatalogInput()
+        catalog: dict = {
+            "openapi": "3.1.0",
+            "info": {
+                "title": "Live Frappe REST API",
+                "description": (
+                    "Generated from the connected Frappe instance. "
+                    "Permissions and installed customizations remain authoritative."
+                ),
+            },
+            "servers": [{"url": f"{client.base_url}/api"}],
+            "paths": {
+                "/resource/{doctype}": {
+                    "get": {
+                        "operationId": "frappe_list_documents",
+                        "parameters": [
+                            {"name": "doctype", "in": "path", "required": True, "schema": {"type": "string"}},
+                            {"name": "fields", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}},
+                            {"name": "filters", "in": "query", "schema": {"type": "array"}},
+                            {"name": "limit_page_length", "in": "query", "schema": {"type": "integer"}},
+                        ],
+                    },
+                    "post": {
+                        "operationId": "frappe_create_document",
+                        "parameters": [
+                            {"name": "doctype", "in": "path", "required": True, "schema": {"type": "string"}},
+                        ],
+                        "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
+                    },
+                },
+                "/resource/{doctype}/{name}": {
+                    "get": {"operationId": "frappe_get_document"},
+                    "put": {
+                        "operationId": "frappe_update_document",
+                        "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
+                    },
+                },
+            },
+            "x-agent-instructions": [
+                "Use exact field names from the live schema; never infer or rename fields.",
+                "For Link fields, call the linked lookup operation or frappe_get_link_options.",
+                "Call frappe_get_creation_plan before proposing a create or update.",
+                "A successful create does not imply submission; follow the DocType workflow.",
+            ],
+        }
+
+        if not request.doctype:
+            return json.dumps(catalog, indent=2, default=str)
+
+        try:
+            related: dict[str, dict] = {}
+            queue = [request.doctype]
+            while queue and len(related) <= request.max_link_schemas:
+                current = queue.pop(0)
+                if current in related:
+                    continue
+                meta = await client.get_doctype_meta(current)
+                if not meta:
+                    continue
+                fields = []
+                for field in meta.get("fields", []):
+                    fieldname = field.get("fieldname")
+                    fieldtype = field.get("fieldtype")
+                    if not fieldname or fieldtype in {"Section Break", "Column Break", "Tab Break", "HTML", "Button", "Heading", "Fold"}:
+                        continue
+                    json_type = {
+                        "Check": "boolean",
+                        "Int": "integer",
+                        "Float": "number",
+                        "Currency": "number",
+                        "Percent": "number",
+                        "Date": "string",
+                        "Datetime": "string",
+                        "Time": "string",
+                    }.get(fieldtype, "string")
+                    item = {
+                        "type": json_type,
+                        "fieldname": fieldname,
+                        "label": field.get("label"),
+                        "x-frappe-fieldtype": fieldtype,
+                        "required": bool(field.get("reqd")),
+                        "read_only": bool(field.get("read_only")),
+                        "default": field.get("default"),
+                        "description": field.get("description") or None,
+                    }
+                    if fieldtype in {"Link", "Table"} and field.get("options"):
+                        target = field["options"]
+                        item["target_doctype"] = target
+                        item["lookup_operation"] = "frappe_get_link_options" if fieldtype == "Link" else "frappe_get_doctype_schema"
+                        if fieldtype == "Table":
+                            item["type"] = "array"
+                            item["items"] = {"$ref": f"#/components/schemas/{target}"}
+                        if request.include_link_schemas and target not in related and len(related) + len(queue) < request.max_link_schemas:
+                            queue.append(target)
+                    if fieldtype == "Select":
+                        item["enum"] = [option for option in (field.get("options") or "").split("\n") if option]
+                    fields.append(item)
+                related[current] = {
+                    "type": "object",
+                    "description": f"Live schema for Frappe DocType '{current}'.",
+                    "properties": {field["fieldname"]: field for field in fields},
+                    "required": [field["fieldname"] for field in fields if field["required"]],
+                }
+
+            catalog["x-doctype"] = request.doctype
+            catalog["components"] = {"schemas": related}
+            catalog["paths"]["/method/frappe.desk.form.load.getdoctype"] = {
+                "get": {
+                    "operationId": "frappe_get_doctype_schema",
+                    "description": "Resolve a live DocType schema and field metadata."
+                }
+            }
+            catalog["paths"]["/resource/{target_doctype}"] = {
+                "get": {
+                    "operationId": "frappe_get_link_options",
+                    "description": "List current records for a Link field target; filter by name when needed."
+                }
+            }
+            return json.dumps(catalog, indent=2, default=str)
+        except Exception as e:
+            return err(e)
 
     @mcp.tool(
         name="hrms_list_doctypes",
