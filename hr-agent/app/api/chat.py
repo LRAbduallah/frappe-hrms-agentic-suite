@@ -3,13 +3,14 @@ import logging
 import time
 import uuid
 from typing import Any, AsyncGenerator
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from app.agents.orchestrator import create_orchestrator
+from app.auth import require_agent_api_key
 from app.config import settings
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_agent_api_key)])
 logger = logging.getLogger(__name__)
 
 

@@ -2,12 +2,17 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Any
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from app.auth import require_agent_api_key
 from app.governance.approvals import approval_store
 from app.models.schemas import ApprovalRequest, ApprovalStatus
 
-router = APIRouter(prefix="/v1/approvals", tags=["approvals"])
+router = APIRouter(
+    prefix="/v1/approvals",
+    tags=["approvals"],
+    dependencies=[Depends(require_agent_api_key)],
+)
 logger = logging.getLogger(__name__)
 
 
@@ -161,4 +166,3 @@ async def reject_request(approval_id: str, decision: ApprovalDecision):
     approval_store.save(req)
     logger.info(f"Rejected action {approval_id}: {req.action}")
     return req
-

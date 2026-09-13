@@ -13,12 +13,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.auth import require_agent_api_key
 from app.config import settings
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_agent_api_key)])
 logger = logging.getLogger(__name__)
 
 
