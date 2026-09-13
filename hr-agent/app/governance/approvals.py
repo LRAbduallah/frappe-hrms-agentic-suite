@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import tempfile
 import uuid
 from typing import Any
 from app.config import settings
@@ -46,8 +47,20 @@ class ApprovalStore:
         return req
 
     def save(self, req: ApprovalRequest) -> None:
-        with open(self._get_path(req.id), "w", encoding="utf-8") as f:
-            f.write(req.model_dump_json(indent=2))
+        payload = req.model_dump_json(indent=2)
+        fd, temp_path = tempfile.mkstemp(prefix=f".{req.id}.", suffix=".tmp", dir=self.storage_dir)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(payload)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, self._get_path(req.id))
+        except Exception:
+            try:
+                os.unlink(temp_path)
+            except FileNotFoundError:
+                pass
+            raise
 
     def get(self, approval_id: str) -> ApprovalRequest | None:
         path = self._get_path(approval_id)

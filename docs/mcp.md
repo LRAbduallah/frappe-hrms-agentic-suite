@@ -52,8 +52,14 @@ setup or migration windows.
 2. Read its schema.
 3. Resolve linked values such as Department or Leave Type.
 4. Create or update the document.
-5. Submit separately when required.
-6. Read the result or history for confirmation.
+5. Confirm the returned document name and read the document back from Frappe.
+6. Submit separately when required.
+7. Read the result or history for confirmation.
+
+Approval execution is fail-closed: an unavailable MCP gateway, invalid schema
+payload, Frappe error, missing created document name, or failed read-back
+verification marks the approval as `FAILED`; it is never reported as a
+successful or simulated write.
 ```
 
 `hrms_apply_leave` creates a Leave Application but does not submit it. Generic

@@ -1,3 +1,4 @@
+import json
 import logging
 import uuid
 from datetime import datetime
@@ -59,13 +60,16 @@ def _execute_tool_on_frappe(tool_name: str, arguments: dict[str, Any]) -> dict[s
 
     if not mcp_manager.client:
         logger.warning(
-            f"MCP client not connected — cannot execute tool '{tool_name}'. "
-            "Returning simulated success."
+            f"MCP client not connected — cannot execute tool '{tool_name}'."
         )
         return {
-            "status": "SUCCESS",
-            "message": f"Operation '{tool_name}' approved (MCP not connected — execution simulated).",
-            "simulated": True,
+            "status": "ERROR",
+            "message": (
+                f"Operation '{tool_name}' was not executed because the MCP gateway is unavailable. "
+                "The approval remains recorded as failed and must be retried after MCP is healthy."
+            ),
+            "executed_tool": tool_name,
+            "arguments": arguments,
         }
 
     # Normalize arguments to match Frappe MCP Pydantic schemas (params wrapper)
@@ -84,6 +88,46 @@ def _execute_tool_on_frappe(tool_name: str, arguments: dict[str, Any]) -> dict[s
         exec_result = parse_mcp_tool_result(raw_result, tool_name)
         exec_result["arguments"] = arguments
         exec_result["normalized_arguments"] = normalized_args
+
+        if exec_result.get("status") == "SUCCESS" and tool_name == "frappe_create_document":
+            response = json.loads(exec_result.get("frappe_response", "{}"))
+            created_name = response.get("name") if isinstance(response, dict) else None
+            if not created_name and isinstance(response, dict):
+                created_name = (response.get("data") or {}).get("name")
+            if not created_name:
+                return {
+                    "status": "ERROR",
+                    "message": (
+                        f"Frappe acknowledged '{tool_name}' but did not return the created document name. "
+                        "The write cannot be confirmed."
+                    ),
+                    "executed_tool": tool_name,
+                    "arguments": arguments,
+                    "normalized_arguments": normalized_args,
+                    "raw_result": exec_result.get("frappe_response"),
+                }
+
+            verification_raw = mcp_manager.client.call_tool_sync(
+                tool_use_id=f"{tool_use_id}-verify",
+                name="frappe_get_document",
+                arguments={"params": {"doctype": normalized_args["params"]["doctype"], "name": created_name}},
+            )
+            verification = parse_mcp_tool_result(verification_raw, "frappe_get_document")
+            if verification.get("status") != "SUCCESS":
+                return {
+                    "status": "ERROR",
+                    "message": (
+                        f"Document '{created_name}' was reported as created, but verification failed: "
+                        f"{verification.get('message', 'unknown verification error')}"
+                    ),
+                    "executed_tool": tool_name,
+                    "arguments": arguments,
+                    "normalized_arguments": normalized_args,
+                    "created_name": created_name,
+                    "verification": verification,
+                }
+            exec_result["created_name"] = created_name
+            exec_result["verification"] = verification
 
         if exec_result.get("status") == "SUCCESS":
             logger.info(f"[APPROVAL:EXECUTE] Tool '{tool_name}' executed successfully.")
@@ -129,9 +173,31 @@ async def approve_request(approval_id: str, decision: ApprovalDecision):
     if req.status != ApprovalStatus.PENDING:
         raise HTTPException(status_code=400, detail=f"Request is already in state {req.status}")
 
-    # Mark approved
+    if req.tool_name.startswith("frappe_") or req.tool_name.startswith("hrms_"):
+        from app.governance.payload_validator import validate_and_dry_run
+
+        req.preflight = validate_and_dry_run(req.tool_name, req.arguments)
+        if not req.preflight.get("dry_run_passed", False):
+            req.status = ApprovalStatus.FAILED
+            req.result = {
+                "status": "ERROR",
+                "message": "Approval was not executed because pre-flight validation failed.",
+                "errors": req.preflight.get("errors", []),
+            }
+            approval_store.save(req)
+            logger.error("Approval %s blocked by pre-flight validation: %s", approval_id, req.preflight)
+            return req
+
+    # Persist the intermediate state before executing so an approval can never
+    # appear pending while its execution is already in progress.
+    req.status = ApprovalStatus.APPROVED
     req.approved_at = datetime.utcnow().isoformat()
     req.approved_by = decision.approved_by
+    req.result = {
+        "status": "EXECUTING",
+        "message": "Approval accepted. Executing the requested Frappe operation.",
+    }
+    approval_store.save(req)
 
     # Actually execute the mutation on Frappe via MCP
     execution_result = _execute_tool_on_frappe(req.tool_name, req.arguments)

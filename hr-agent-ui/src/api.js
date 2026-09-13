@@ -62,7 +62,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(decision),
     }))
-    return res.json()
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.detail || data.message || `Approval failed (${res.status})`)
+    return data
   },
 
   async rejectRequest(approvalId, decision = {}) {
@@ -71,14 +73,18 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(decision),
     }))
-    return res.json()
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.detail || data.message || `Rejection failed (${res.status})`)
+    return data
   },
 
   async dryRunApproval(approvalId) {
     const res = await fetch(`${getBaseUrl()}/v1/approvals/${approvalId}/dry-run`, requestOptions({
       method: 'POST',
     }))
-    return res.json()
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.detail || data.message || `Dry run failed (${res.status})`)
+    return data
   },
 
   // Streaming chat handler compliant with standard OpenAI SSE specification

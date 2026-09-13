@@ -42,9 +42,17 @@ class MCPManager:
             )
             return self._tools
         except Exception as e:
+            if self.client:
+                try:
+                    self.client.stop()
+                except Exception:
+                    logger.debug("MCP client cleanup failed after initialization error.", exc_info=True)
+            self.client = None
+            self._tools = []
+            self._tools_by_name = {}
             logger.warning(
                 f"Could not connect to Frappe MCP at {self.url} during startup ({e}). "
-                "Agent will use standalone/mock tools until MCP Gateway is reachable."
+                "MCP-backed operations will remain unavailable until the gateway is reachable."
             )
             return []
 

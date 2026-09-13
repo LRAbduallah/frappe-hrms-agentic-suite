@@ -19,6 +19,7 @@ export function ApprovalsPanel({ approvals, onApprove, onReject, onDryRun, onRef
   const [filter, setFilter] = useState('ALL')
   const [expandedId, setExpandedId] = useState(null)
   const [actionInProgress, setActionInProgress] = useState(null)
+  const [actionError, setActionError] = useState(null)
 
   const filteredApprovals = approvals.filter((app) => {
     if (filter === 'ALL') return true
@@ -27,8 +28,11 @@ export function ApprovalsPanel({ approvals, onApprove, onReject, onDryRun, onRef
 
   const handleApprove = async (id) => {
     setActionInProgress(id)
+    setActionError(null)
     try {
       await onApprove(id)
+    } catch (error) {
+      setActionError({ id, message: error.message || 'Approval execution failed.' })
     } finally {
       setActionInProgress(null)
     }
@@ -36,8 +40,11 @@ export function ApprovalsPanel({ approvals, onApprove, onReject, onDryRun, onRef
 
   const handleReject = async (id) => {
     setActionInProgress(id)
+    setActionError(null)
     try {
       await onReject(id)
+    } catch (error) {
+      setActionError({ id, message: error.message || 'Rejection failed.' })
     } finally {
       setActionInProgress(null)
     }
@@ -46,8 +53,11 @@ export function ApprovalsPanel({ approvals, onApprove, onReject, onDryRun, onRef
   const handleDryRun = async (id) => {
     if (!onDryRun) return
     setActionInProgress(id)
+    setActionError(null)
     try {
       await onDryRun(id)
+    } catch (error) {
+      setActionError({ id, message: error.message || 'Dry run failed.' })
     } finally {
       setActionInProgress(null)
     }
@@ -293,6 +303,22 @@ export function ApprovalsPanel({ approvals, onApprove, onReject, onDryRun, onRef
                     }}
                   >
                     <strong>Execution Error:</strong> {req.result.message || JSON.stringify(req.result)}
+                  </div>
+                )}
+
+                {actionError?.id === req.id && (
+                  <div
+                    style={{
+                      padding: '6px 8px',
+                      borderRadius: '4px',
+                      background: 'rgba(238, 0, 0, 0.1)',
+                      border: '1px solid rgba(238, 0, 0, 0.3)',
+                      color: '#ff6b6b',
+                      fontSize: '11px',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <strong>Request failed:</strong> {actionError.message}
                   </div>
                 )}
 

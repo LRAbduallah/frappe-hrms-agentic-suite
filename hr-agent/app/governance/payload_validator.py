@@ -36,8 +36,12 @@ def normalize_mcp_arguments(tool_name: str, arguments: dict[str, Any]) -> dict[s
     if tool_name == "frappe_create_document":
         doctype = inner.get("doctype", "")
         fields = inner.get("fields") or inner.get("document") or {}
+        if not str(doctype).strip():
+            raise ValueError("Create document request is missing the DocType name.")
         if not isinstance(fields, dict):
             fields = {"value": fields}
+        if not fields:
+            raise ValueError(f"Create document request for '{doctype}' has no field values.")
         return {
             "params": {
                 "doctype": str(doctype),
@@ -49,8 +53,12 @@ def normalize_mcp_arguments(tool_name: str, arguments: dict[str, Any]) -> dict[s
         doctype = inner.get("doctype", "")
         name = inner.get("name") or inner.get("document_name") or ""
         fields = inner.get("fields") or inner.get("document") or {}
+        if not str(doctype).strip() or not str(name).strip():
+            raise ValueError("Update document request must include both DocType and document name.")
         if not isinstance(fields, dict):
             fields = {"value": fields}
+        if not fields:
+            raise ValueError(f"Update document request for '{doctype}/{name}' has no field values.")
         return {
             "params": {
                 "doctype": str(doctype),
@@ -195,19 +203,19 @@ def validate_and_dry_run(tool_name: str, arguments: dict[str, Any]) -> dict[str,
     errors = []
     warnings = []
 
-    # If MCP client is not connected, report simulated check
+    # A disconnected gateway must never be treated as a successful dry run.
     if not mcp_manager.client:
         checks.append({
             "name": "MCP Connection",
             "status": "WARNING",
-            "detail": "MCP Gateway not connected. Pre-flight checks running in offline mode."
+            "detail": "MCP Gateway not connected. Frappe prerequisites could not be checked."
         })
         return {
-            "valid": True,
-            "dry_run_passed": True,
+            "valid": False,
+            "dry_run_passed": False,
             "checks": checks,
-            "errors": [],
-            "warnings": ["MCP not connected — pre-flight dry run was skipped."],
+            "errors": ["MCP Gateway is unavailable; the Frappe operation cannot be validated or approved."],
+            "warnings": [],
         }
 
     inner = arguments.get("params", arguments)
@@ -268,18 +276,36 @@ def validate_and_dry_run(tool_name: str, arguments: dict[str, Any]) -> dict[str,
             if f.get("fieldname")
         }
         unknown_fields = [k for k in fields.keys() if k not in valid_fieldnames and k != "doctype"]
+        required_fields = {
+            f.get("fieldname")
+            for f in schema_data.get("fields", [])
+            if f.get("fieldname") and f.get("required")
+        }
+        missing_required = sorted(field for field in required_fields if field not in fields)
         if unknown_fields:
-            warnings.append(f"Field(s) {unknown_fields} do not exist on DocType '{doctype}'. They may be ignored by Frappe.")
+            errors.append(
+                f"Field(s) {unknown_fields} do not exist on DocType '{doctype}'. "
+                "Resolve the schema mismatch before approval."
+            )
             checks.append({
                 "name": "Field Names",
-                "status": "WARNING",
+                "status": "FAILED",
                 "detail": f"Unknown fields: {', '.join(unknown_fields)}",
+            })
+        elif missing_required:
+            errors.append(
+                f"Required field(s) missing for '{doctype}': {', '.join(missing_required)}."
+            )
+            checks.append({
+                "name": "Required Fields",
+                "status": "FAILED",
+                "detail": f"Missing: {', '.join(missing_required)}",
             })
         else:
             checks.append({
                 "name": "Field Names",
                 "status": "PASSED",
-                "detail": f"All {len(fields)} field name(s) match the schema.",
+                "detail": f"All {len(fields)} field name(s) are valid and required fields are present.",
             })
 
     # Check 3: Employee Existence check (if employee field present)
