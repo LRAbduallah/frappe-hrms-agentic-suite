@@ -1,7 +1,6 @@
 import json
 import logging
 import uuid
-from datetime import datetime
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -188,16 +187,15 @@ async def approve_request(approval_id: str, decision: ApprovalDecision):
             logger.error("Approval %s blocked by pre-flight validation: %s", approval_id, req.preflight)
             return req
 
-    # Persist the intermediate state before executing so an approval can never
-    # appear pending while its execution is already in progress.
-    req.status = ApprovalStatus.APPROVED
-    req.approved_at = datetime.utcnow().isoformat()
-    req.approved_by = decision.approved_by
-    req.result = {
-        "status": "EXECUTING",
-        "message": "Approval accepted. Executing the requested Frappe operation.",
-    }
-    approval_store.save(req)
+    # Atomically claim the request so double-clicks or concurrent API retries
+    # cannot execute the same mutation twice.
+    claimed = approval_store.claim_for_execution(approval_id, decision.approved_by)
+    if not claimed:
+        raise HTTPException(
+            status_code=409,
+            detail="Approval was already claimed or is no longer pending.",
+        )
+    req = claimed
 
     # Actually execute the mutation on Frappe via MCP
     execution_result = _execute_tool_on_frappe(req.tool_name, req.arguments)

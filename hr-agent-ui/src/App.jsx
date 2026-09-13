@@ -102,6 +102,7 @@ export function App() {
   const [agentStatus, setAgentStatus] = useState('Thinking')
   const [approvals, setApprovals] = useState([])
   const [approvalsLoading, setApprovalsLoading] = useState(false)
+  const [approvalsError, setApprovalsError] = useState('')
   const [showApprovals, setShowApprovals] = useState(true)
   const [statusInfo, setStatusInfo] = useState({
     healthy: true,
@@ -201,9 +202,12 @@ export function App() {
     setApprovalsLoading(true)
     try {
       const data = await api.getApprovals()
-      if (Array.isArray(data)) setApprovals(data)
+      if (!Array.isArray(data)) throw new Error('Approval service returned an invalid response.')
+      setApprovals(data)
+      setApprovalsError('')
     } catch (e) {
       console.error('Approvals fetch failed:', e)
+      setApprovalsError(e.message || 'Could not load approvals. Retrying automatically.')
     } finally {
       setApprovalsLoading(false)
     }
@@ -451,6 +455,7 @@ export function App() {
             <div style={{ width: '350px', height: '100%', flexShrink: 0 }}>
               <ApprovalsPanel
                 approvals={approvals}
+                error={approvalsError}
                 onApprove={handleApprove}
                 onReject={handleReject}
                 onDryRun={handleDryRun}

@@ -53,7 +53,9 @@ export const api = {
       ? `${getBaseUrl()}/v1/approvals?session_id=${encodeURIComponent(sessionId)}`
       : `${getBaseUrl()}/v1/approvals`
     const res = await fetch(url, requestOptions())
-    return res.json()
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.detail || `Failed to load approvals (${res.status})`)
+    return data
   },
 
   async approveRequest(approvalId, decision = {}) {

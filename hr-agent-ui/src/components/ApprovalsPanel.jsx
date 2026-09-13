@@ -15,7 +15,7 @@ import {
   Play,
 } from 'lucide-react'
 
-export function ApprovalsPanel({ approvals, onApprove, onReject, onDryRun, onRefresh, loading }) {
+export function ApprovalsPanel({ approvals, onApprove, onReject, onDryRun, onRefresh, loading, error }) {
   const [filter, setFilter] = useState('ALL')
   const [expandedId, setExpandedId] = useState(null)
   const [actionInProgress, setActionInProgress] = useState(null)
@@ -181,6 +181,39 @@ export function ApprovalsPanel({ approvals, onApprove, onReject, onDryRun, onRef
       </div>
 
       {/* Filter Tabs */}
+      {error && (
+        <div
+          style={{
+            margin: '10px 14px 0',
+            padding: '8px 10px',
+            borderRadius: '5px',
+            background: 'rgba(238, 0, 0, 0.1)',
+            border: '1px solid rgba(238, 0, 0, 0.3)',
+            color: '#ff7875',
+            fontSize: '11px',
+            lineHeight: 1.4,
+          }}
+        >
+          Approval sync failed: {error}
+          <button
+            onClick={onRefresh}
+            style={{
+              display: 'block',
+              marginTop: '5px',
+              padding: 0,
+              background: 'none',
+              border: 'none',
+              color: '#ffaaa8',
+              cursor: 'pointer',
+              fontSize: '11px',
+              textDecoration: 'underline',
+            }}
+          >
+            Retry now
+          </button>
+        </div>
+      )}
+
       <div
         style={{
           display: 'flex',
