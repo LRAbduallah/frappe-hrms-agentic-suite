@@ -589,22 +589,11 @@ export function ChatInterface({
                   boxShadow: '0 0 20px rgba(255, 255, 255, 0.15)',
                 }}
               >
-                <svg width="18" height="18" viewBox="0 0 76 65" fill="#000">
-                  <path d="M37.5274 0L75.0548 65H0L37.5274 0Z" />
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2.5l8.2 4.75v9.5L12 21.5l-8.2-4.75v-9.5L12 2.5zm0 3.1L6.5 8.8v6.4l5.5 3.2 5.5-3.2V8.8L12 5.6z"/>
+                  <circle cx="12" cy="12" r="2.2"/>
                 </svg>
               </div>
-
-              <h1
-                style={{
-                  fontSize: '20px',
-                  fontWeight: 600,
-                  letterSpacing: '-0.02em',
-                  color: 'var(--text-primary)',
-                  marginBottom: '8px',
-                }}
-              >
-                HR Operations Agent
-              </h1>
 
               <p
                 style={{

@@ -2,21 +2,49 @@ const getBaseUrl = () => {
   return import.meta.env.VITE_API_BASE_URL || ''
 }
 
+const requestOptions = (options = {}) => ({
+  ...options,
+  credentials: 'include',
+})
+
 export const api = {
   baseUrl: getBaseUrl(),
 
+  async getCurrentUser() {
+    const res = await fetch(`${getBaseUrl()}/auth/me`, requestOptions())
+    if (!res.ok) throw new Error('Not authenticated')
+    return res.json()
+  },
+
+  async login(username, password) {
+    const res = await fetch(`${getBaseUrl()}/auth/login`, requestOptions({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    }))
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.detail || 'Invalid username or password')
+    }
+    return res.json()
+  },
+
+  async logout() {
+    await fetch(`${getBaseUrl()}/auth/logout`, requestOptions({ method: 'POST' }))
+  },
+
   async getHealth() {
-    const res = await fetch(`${getBaseUrl()}/health`)
+    const res = await fetch(`${getBaseUrl()}/health`, requestOptions())
     return res.json()
   },
 
   async getReady() {
-    const res = await fetch(`${getBaseUrl()}/ready`)
+    const res = await fetch(`${getBaseUrl()}/ready`, requestOptions())
     return res.json()
   },
 
   async getModels() {
-    const res = await fetch(`${getBaseUrl()}/v1/models`)
+    const res = await fetch(`${getBaseUrl()}/v1/models`, requestOptions())
     return res.json()
   },
 
@@ -24,39 +52,39 @@ export const api = {
     const url = sessionId
       ? `${getBaseUrl()}/v1/approvals?session_id=${encodeURIComponent(sessionId)}`
       : `${getBaseUrl()}/v1/approvals`
-    const res = await fetch(url)
+    const res = await fetch(url, requestOptions())
     return res.json()
   },
 
   async approveRequest(approvalId, decision = {}) {
-    const res = await fetch(`${getBaseUrl()}/v1/approvals/${approvalId}/approve`, {
+    const res = await fetch(`${getBaseUrl()}/v1/approvals/${approvalId}/approve`, requestOptions({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(decision),
-    })
+    }))
     return res.json()
   },
 
   async rejectRequest(approvalId, decision = {}) {
-    const res = await fetch(`${getBaseUrl()}/v1/approvals/${approvalId}/reject`, {
+    const res = await fetch(`${getBaseUrl()}/v1/approvals/${approvalId}/reject`, requestOptions({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(decision),
-    })
+    }))
     return res.json()
   },
 
   async dryRunApproval(approvalId) {
-    const res = await fetch(`${getBaseUrl()}/v1/approvals/${approvalId}/dry-run`, {
+    const res = await fetch(`${getBaseUrl()}/v1/approvals/${approvalId}/dry-run`, requestOptions({
       method: 'POST',
-    })
+    }))
     return res.json()
   },
 
   // Streaming chat handler compliant with standard OpenAI SSE specification
   async sendChat({ messages, stream = true, sessionId = null }, onChunk, onDone, onError) {
     try {
-      const res = await fetch(`${getBaseUrl()}/v1/chat/completions`, {
+      const res = await fetch(`${getBaseUrl()}/v1/chat/completions`, requestOptions({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -68,7 +96,7 @@ export const api = {
           stream,
           session_id: sessionId,
         }),
-      })
+      }))
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
@@ -126,31 +154,30 @@ export const api = {
   // ── Session Management ───────────────────────────────────────────────────
 
   async getSessions() {
-    const res = await fetch(`${getBaseUrl()}/v1/sessions`)
+    const res = await fetch(`${getBaseUrl()}/v1/sessions`, requestOptions())
     if (!res.ok) throw new Error(`Failed to fetch sessions: ${res.status}`)
     return res.json()
   },
 
   async createSession() {
-    const res = await fetch(`${getBaseUrl()}/v1/sessions`, {
+    const res = await fetch(`${getBaseUrl()}/v1/sessions`, requestOptions({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-    })
+    }))
     if (!res.ok) throw new Error(`Failed to create session: ${res.status}`)
     return res.json()
   },
 
   async getSession(sessionId) {
-    const res = await fetch(`${getBaseUrl()}/v1/sessions/${encodeURIComponent(sessionId)}`)
+    const res = await fetch(`${getBaseUrl()}/v1/sessions/${encodeURIComponent(sessionId)}`, requestOptions())
     if (!res.ok) throw new Error(`Failed to fetch session: ${res.status}`)
     return res.json()
   },
 
   async deleteSession(sessionId) {
-    const res = await fetch(`${getBaseUrl()}/v1/sessions/${encodeURIComponent(sessionId)}`, {
+    const res = await fetch(`${getBaseUrl()}/v1/sessions/${encodeURIComponent(sessionId)}`, requestOptions({
       method: 'DELETE',
-    })
+    }))
     if (!res.ok) throw new Error(`Failed to delete session: ${res.status}`)
   },
 }
-

@@ -3,9 +3,99 @@ import { Sidebar } from './components/Sidebar'
 import { ChatInterface } from './components/ChatInterface'
 import { ApprovalsPanel } from './components/ApprovalsPanel'
 import { api } from './api'
-import { Shield, SidebarClose, SidebarOpen } from 'lucide-react'
+import { Activity, LogOut, Shield, SidebarClose, SidebarOpen, Sparkles } from 'lucide-react'
+
+function LoginScreen({ onLogin }) {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+
+  const submit = async (event) => {
+    event.preventDefault()
+    setSubmitting(true)
+    setError('')
+    try {
+      await api.login(username, password)
+      onLogin()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="login-shell">
+      <div className="login-layout">
+        <section className="login-welcome">
+          <div className="login-eyebrow">
+            <span className="login-status-dot" />
+            HRMS OPERATIONS AGENT
+          </div>
+          <h1>Make every HR operation feel effortless.</h1>
+          <p className="login-intro">
+            Ask questions, coordinate approvals, and take action across your HRMS
+            workspace with an agent that understands your operations.
+          </p>
+          <div className="login-highlights">
+            <div>
+              <Sparkles size={16} />
+              <span>Intelligent HR workflows</span>
+            </div>
+            <div>
+              <Shield size={16} />
+              <span>Human approval controls</span>
+            </div>
+            <div>
+              <Activity size={16} />
+              <span>Connected to your HRMS</span>
+            </div>
+          </div>
+        </section>
+
+        <form onSubmit={submit} className="vercel-card login-card">
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ fontSize: '20px', fontWeight: 600, marginBottom: '6px' }}>Welcome back</div>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Sign in to your operations workspace</div>
+          </div>
+          <label style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '12px', marginBottom: '6px' }}>
+            Username
+          </label>
+          <input
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            autoComplete="username"
+            className="auth-input"
+            required
+          />
+          <label style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '12px', margin: '16px 0 6px' }}>
+            Password
+          </label>
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="current-password"
+            className="auth-input"
+            required
+          />
+          {error && <div style={{ color: '#ff6b6b', fontSize: '12px', marginTop: '14px' }}>{error}</div>}
+          <button type="submit" className="vercel-btn-primary" disabled={submitting} style={{ width: '100%', marginTop: '20px' }}>
+            {submitting ? 'Signing in…' : 'Sign in'}
+          </button>
+          <div className="login-card-footer">
+            Secure workspace access
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 export function App() {
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -22,6 +112,13 @@ export function App() {
   const [currentSessionId, setCurrentSessionId] = useState(null)
   const [sessions, setSessions] = useState([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
+
+  useEffect(() => {
+    api.getCurrentUser()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setAuthLoading(false))
+  }, [])
 
   // ── Fetch sessions list ───────────────────────────────────────────────────
   const fetchSessions = useCallback(async () => {
@@ -112,6 +209,7 @@ export function App() {
   }, [])
 
   useEffect(() => {
+    if (!user) return undefined
     fetchStatus()
     fetchApprovals()
     fetchSessions()
@@ -121,7 +219,15 @@ export function App() {
       clearInterval(approvalsInterval)
       clearInterval(sessionsInterval)
     }
-  }, [fetchStatus, fetchApprovals, fetchSessions])
+  }, [user, fetchStatus, fetchApprovals, fetchSessions])
+
+  if (authLoading) {
+    return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg-app)', color: 'var(--text-secondary)' }}>Loading…</div>
+  }
+
+  if (!user) {
+    return <LoginScreen onLogin={() => api.getCurrentUser().then(setUser)} />
+  }
 
   const handleInputChange = (e) => {
     setInput(e.target.value)
@@ -257,13 +363,23 @@ export function App() {
                 fontFamily: 'var(--font-mono)',
               }}
             >
-              {currentSessionId
-                ? currentSessionId.slice(0, 8) + '…'
-                : import.meta.env.VITE_API_BASE_URL || 'PROXY :8001'}
+              {currentSessionId ? currentSessionId : 'No active session'}
             </span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{user.username}</span>
+            <button
+              onClick={async () => {
+                await api.logout()
+                setUser(null)
+              }}
+              className="vercel-btn-secondary"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 10px', fontSize: '12px' }}
+            >
+              <LogOut size={13} />
+              <span>Sign out</span>
+            </button>
             <button
               onClick={() => setShowApprovals(!showApprovals)}
               className="vercel-btn-secondary"
