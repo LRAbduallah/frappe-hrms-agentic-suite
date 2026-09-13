@@ -3,10 +3,12 @@
 set -Eeuo pipefail
 
 BENCH_DIR="/home/frappe/frappe-bench"
-SITE_NAME="hrms.localhost"
+SITE_NAME="${SITE_NAME:-hrms.localhost}"
 
-MARIADB_ROOT_PASSWORD="123"
-ADMIN_PASSWORD="admin"
+# The root compose file always supplies these values. Defaults preserve the
+# standalone development compose behavior for existing local installations.
+MARIADB_ROOT_PASSWORD="${MARIADB_ROOT_PASSWORD:-123}"
+ADMIN_PASSWORD="${FRAPPE_ADMIN_PASSWORD:-admin}"
 
 echo "======================================"
 echo "Starting Frappe initialization"
