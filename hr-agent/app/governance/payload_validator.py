@@ -270,11 +270,12 @@ def validate_and_dry_run(tool_name: str, arguments: dict[str, Any]) -> dict[str,
 
     # Check 2: Field names validation against schema
     if schema_data and isinstance(fields, dict) and fields:
-        valid_fieldnames = {
-            f.get("fieldname")
+        schema_fields = {
+            f.get("fieldname"): f
             for f in schema_data.get("fields", [])
             if f.get("fieldname")
         }
+        valid_fieldnames = set(schema_fields)
         unknown_fields = [k for k in fields.keys() if k not in valid_fieldnames and k != "doctype"]
         required_fields = {
             f.get("fieldname")
@@ -307,6 +308,82 @@ def validate_and_dry_run(tool_name: str, arguments: dict[str, Any]) -> dict[str,
                 "status": "PASSED",
                 "detail": f"All {len(fields)} field name(s) are valid and required fields are present.",
             })
+
+        # Validate every supplied Link and Select value against the live schema.
+        # Frappe may reject these only at write time, which used to create an
+        # approval that could never succeed.
+        for fieldname, value in fields.items():
+            field = schema_fields.get(fieldname)
+            if not field or value in (None, ""):
+                continue
+
+            if field.get("fieldtype") == "Link":
+                target_doctype = field.get("options")
+                if target_doctype:
+                    try:
+                        link_res = mcp_manager.client.call_tool_sync(
+                            tool_use_id=f"dryrun-link-{fieldname}",
+                            name="frappe_list_documents",
+                            arguments={
+                                "params": {
+                                    "doctype": target_doctype,
+                                    "fields": ["name"],
+                                    "filters": [[ "name", "=", str(value) ]],
+                                    "limit": 1,
+                                }
+                            },
+                        )
+                        link_result = parse_mcp_tool_result(link_res, "frappe_list_documents")
+                        if link_result["status"] != "SUCCESS":
+                            raise ValueError(link_result.get("message", "Link lookup failed"))
+                        link_payload = json.loads(link_result.get("frappe_response", "{}"))
+                        matches = link_payload.get("documents", [])
+                        if not matches:
+                            errors.append(
+                                f"'{value}' is not an available {target_doctype} for field '{fieldname}'. "
+                                "Choose an existing record returned by the MCP link lookup."
+                            )
+                            checks.append({
+                                "name": f"Link: {fieldname}",
+                                "status": "FAILED",
+                                "detail": f"No {target_doctype} named '{value}' exists.",
+                            })
+                        else:
+                            checks.append({
+                                "name": f"Link: {fieldname}",
+                                "status": "PASSED",
+                                "detail": f"Verified existing {target_doctype}: {value}.",
+                            })
+                    except Exception as e:
+                        errors.append(
+                            f"Could not verify Link field '{fieldname}' value '{value}': {e}"
+                        )
+                        checks.append({
+                            "name": f"Link: {fieldname}",
+                            "status": "FAILED",
+                            "detail": str(e),
+                        })
+
+            if field.get("fieldtype") == "Select" and field.get("options"):
+                allowed = [option.strip() for option in str(field["options"]).splitlines() if option.strip()]
+                if allowed and str(value) not in allowed:
+                    errors.append(
+                        f"'{value}' is not a valid option for '{fieldname}'. "
+                        f"Available options: {', '.join(allowed)}."
+                    )
+                    checks.append({
+                        "name": f"Select: {fieldname}",
+                        "status": "FAILED",
+                        "detail": f"Allowed values: {', '.join(allowed)}",
+                    })
+
+            if field.get("fieldtype") == "Table" and not isinstance(value, list):
+                errors.append(f"Child table field '{fieldname}' must be a list of row objects.")
+                checks.append({
+                    "name": f"Child table: {fieldname}",
+                    "status": "FAILED",
+                    "detail": "Expected a list of child rows.",
+                })
 
     # Check 3: Employee Existence check (if employee field present)
     emp_id = (

@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from app.agents.orchestrator import create_orchestrator
 from app.auth import require_agent_api_key
 from app.config import settings
+from app.governance.approvals import approval_store, reset_approval_session, set_approval_session
 
 router = APIRouter(dependencies=[Depends(require_agent_api_key)])
 logger = logging.getLogger(__name__)
@@ -99,6 +100,7 @@ def _friendly_tool_name(tool_name: str) -> str:
         "frappe_get_document": "an HRMS record",
         "frappe_list_documents": "HRMS records",
         "frappe_get_doctype_schema": "the HRMS schema",
+        "frappe_get_creation_plan": "the HRMS creation plan",
         "frappe_get_link_options": "valid HRMS options",
         "hrms_find_employee": "employee records",
         "hrms_search_employees": "employee records",
@@ -130,6 +132,7 @@ async def generate_stream_response(
     prompt: str, model: str, completion_id: str, session_id: str
 ) -> AsyncGenerator[str, None]:
     created = int(time.time())
+    session_token = set_approval_session(session_id)
     try:
         agent = create_orchestrator(session_id=session_id)
         yield _status_event("Planning your request")
@@ -166,6 +169,8 @@ async def generate_stream_response(
             "Please ensure the configured model provider is reachable."
         )
         yield _stream_chunk(error_text, model, completion_id, created)
+    finally:
+        reset_approval_session(session_token)
 
     yield _final_stream_chunk(model, completion_id, created)
     yield "data: [DONE]\n\n"
@@ -183,6 +188,20 @@ async def chat_completions(req: ChatCompletionRequest):
 
     completion_id = f"chatcmpl-{uuid.uuid4().hex[:12]}"
     created = int(time.time())
+    failed_approvals = approval_store.recent_failures(session_id)
+    if failed_approvals:
+        failure_context = "\n".join(
+            f"- Approval {item.id} for {item.action}: "
+            f"{(item.result or {}).get('message', 'execution failed') if isinstance(item.result, dict) else item.result}"
+            for item in failed_approvals
+        )
+        last_user_message = (
+            f"{last_user_message}\n\n"
+            "IMPORTANT APPROVAL FOLLOW-UP CONTEXT:\n"
+            "The following previously approved operations failed. Explain the exact failure, "
+            "ask for corrected values when needed, and do not repeat the same invalid payload:\n"
+            f"{failure_context}"
+        )
 
     if req.stream:
         return StreamingResponse(
@@ -200,6 +219,7 @@ async def chat_completions(req: ChatCompletionRequest):
             },
         )
 
+    session_token = set_approval_session(session_id)
     try:
         agent = create_orchestrator(session_id=session_id)
         # Execute agent reasoning over tools and specialists
@@ -211,6 +231,8 @@ async def chat_completions(req: ChatCompletionRequest):
             f"I encountered an error processing your HR request: {str(e)}. "
             "Please ensure the configured model provider is reachable."
         )
+    finally:
+        reset_approval_session(session_token)
 
     return {
         "id": completion_id,

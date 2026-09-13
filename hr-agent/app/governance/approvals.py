@@ -2,12 +2,23 @@ import json
 import logging
 import os
 import tempfile
+from contextvars import ContextVar, Token
 import uuid
 from typing import Any
 from app.config import settings
 from app.models.schemas import ApprovalRequest, ApprovalStatus, RiskLevel
 
 logger = logging.getLogger(__name__)
+_active_session_id: ContextVar[str | None] = ContextVar("approval_session_id", default=None)
+
+
+def set_approval_session(session_id: str) -> Token:
+    """Bind approval proposals created during an agent turn to its chat session."""
+    return _active_session_id.set(session_id)
+
+
+def reset_approval_session(token: Token) -> None:
+    _active_session_id.reset(token)
 
 
 class ApprovalStore:
@@ -30,9 +41,13 @@ class ApprovalStore:
         preflight: dict[str, Any] | None = None,
     ) -> ApprovalRequest:
         approval_id = str(uuid.uuid4())[:8]
+        effective_session_id = (
+            _active_session_id.get()
+            or session_id
+        )
         req = ApprovalRequest(
             id=approval_id,
-            session_id=session_id,
+            session_id=effective_session_id,
             user_id=user_id,
             action=action,
             tool_name=tool_name,
@@ -83,6 +98,14 @@ class ApprovalStore:
                 except Exception as e:
                     logger.error(f"Error reading approval file {fname}: {e}")
         return sorted(approvals, key=lambda x: x.created_at, reverse=True)
+
+    def recent_failures(self, session_id: str, limit: int = 3) -> list[ApprovalRequest]:
+        """Return failed approvals for the active session for agent follow-up context."""
+        return [
+            req
+            for req in self.list_all(session_id=session_id)
+            if req.status == ApprovalStatus.FAILED
+        ][:limit]
 
 
 approval_store = ApprovalStore()

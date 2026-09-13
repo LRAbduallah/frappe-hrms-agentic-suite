@@ -298,8 +298,19 @@ export function App() {
   }
 
   const handleApprove = async (id) => {
-    await api.approveRequest(id, { approved_by: 'hr_manager', comment: 'Approved via Virtus Studio' })
+    const result = await api.approveRequest(id, { approved_by: 'hr_manager', comment: 'Approved via Virtus Studio' })
     await fetchApprovals()
+    if (result.status === 'FAILED') {
+      const message = result.result?.message || 'The approved operation failed.'
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `approval-failure-${id}-${Date.now()}`,
+          role: 'assistant',
+          content: `Approval ${id} failed: ${message}\n\nPlease correct the unavailable or invalid values and ask me to prepare it again.`,
+        },
+      ])
+    }
   }
 
   const handleReject = async (id) => {
