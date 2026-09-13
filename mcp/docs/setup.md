@@ -4,6 +4,10 @@ This guide explains how to start the local Frappe HRMS services, configure the
 MCP bridge, and connect an MCP-compatible AI client using either stdio or
 Streamable HTTP.
 
+> The canonical project documentation is now in [`../../docs/`](../../docs/).
+> Use the repository-root `docker-compose.yml` and root `.env` for the complete
+> stack. This file remains as an MCP-specific reference.
+
 ## Prerequisites
 
 - Python 3.10 or newer
@@ -14,17 +18,17 @@ Streamable HTTP.
 Install the Python dependencies:
 
 ```bash
-cd /absolute/path/to/frappe-mcp
+cd /absolute/path/to/frappe-hrms-agentic-suite/mcp
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
 ## 1. Start Frappe HRMS with Docker
 
-From the project root, start the Docker services:
+From the repository root, start the Docker services:
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d
+docker compose up -d --build
 ```
 
 The compose file starts:
@@ -43,7 +47,7 @@ The first startup downloads and installs Bench, ERPNext, and HRMS. It can take
 several minutes. Follow the initialization logs with:
 
 ```bash
-docker compose -f docker/docker-compose.yml logs -f frappe
+docker compose logs -f frappe
 ```
 
 Verify that the site responds:
@@ -52,12 +56,12 @@ Verify that the site responds:
 curl http://localhost:8000/api/method/frappe.ping
 ```
 
-The local setup created by `docker/init.sh` uses these initial Desk values:
+The initial Desk credentials are the values configured in the root `.env` file:
 
 ```text
 Site: http://localhost:8000
 user: Administrator 
-password: admin
+password: value of FRAPPE_ADMIN_PASSWORD
 ```
 
 Change the password before using this setup outside a local development
@@ -66,7 +70,7 @@ environment.
 Stop the Docker services with:
 
 ```bash
-docker compose -f docker/docker-compose.yml down
+docker compose down
 ```
 
 The MariaDB data remains in the Docker volume unless the volume is explicitly
@@ -94,6 +98,7 @@ normal agent access.
 ## 3. Configure the MCP Server
 
 Create a `.env` file in the project root:n
+
 ```ini
 FRAPPE_BASE_URL=http://localhost:8000
 FRAPPE_API_KEY=replace_with_api_key
@@ -309,7 +314,7 @@ Check `.env`, the MCP client's `env` block, and the process working directory.
 Check Docker and confirm that Frappe responds on port 8000:
 
 ```bash
-docker compose -f docker/docker-compose.yml ps
+docker compose ps
 curl http://localhost:8000/api/method/frappe.ping
 ```
 
@@ -344,34 +349,8 @@ Stop the MCP server with `Ctrl+C`.
 Stop Frappe and its supporting containers with:
 
 ```bash
-docker compose -f docker/docker-compose.yml down
+docker compose down
 ```
 
 Do not use `docker compose down -v` unless you intentionally want to delete the
 local MariaDB volume and all local Frappe data.
-
-## 11. Populate Employee Test Data
-
-Employee seed data lives in `data_population/employee_data.py`. Edit that file
-before running the scripts and use a unique `employee_number` for every seed
-record. The scripts inspect the live Employee DocType before changing data and
-fail if a seed field is unknown or a required field is missing.
-
-With Frappe running and API credentials configured in `.env`, run:
-
-```bash
-.venv/bin/python data_population/employees/create_employee.py
-```
-
-The create script creates missing records and updates records with matching
-`employee_number` values. It does not create duplicates.
-
-To remove only the records declared in `employee_data.py`, run:
-
-```bash
-.venv/bin/python data_population/employees/delete_employee.py
-```
-
-The delete script never performs an unfiltered Employee delete. The API user
-must have Employee delete permission for cleanup to succeed. Running it deletes
-employee entries; it does not stop the MCP server or Docker services.

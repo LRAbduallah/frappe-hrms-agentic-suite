@@ -950,7 +950,7 @@ The MCP server does not invent approval rules. Frappe remains responsible for de
 
 The Docker files are:
 
-- docker/docker-compose.yml
+- ../docker-compose.yml (canonical repository-root deployment)
 - docker/init.sh
 
 The compose file starts:
