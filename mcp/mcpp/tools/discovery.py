@@ -6,6 +6,7 @@ from typing import Callable, Optional
 
 from mcpp.client import FrappeClient
 from mcpp.compact import IGNORED_FIELD_TYPES, dumps, json_type, select_options
+from mcpp.config import MCP_MAX_VALIDATION_SCHEMA_CHARS
 from mcpp.doctypes import HR_DOCTYPES, format_registry_markdown, get_creation_guidance
 from mcpp.tools.schema import (
     ApiCatalogInput,
@@ -32,7 +33,13 @@ def _summarize_field(field: dict, *, compact: bool) -> dict | None:
     if not fieldname or fieldtype in IGNORED_FIELD_TYPES:
         return None
     required = bool(field.get("reqd"))
-    if compact and not required and fieldtype not in {"Link", "Table", "Select"}:
+    if (
+        compact
+        and not required
+        and fieldtype not in {"Link", "Table", "Select"}
+        and field.get("default") is None
+        and not field.get("mandatory_depends_on")
+    ):
         return None
     item = {
         "fieldname": fieldname,
@@ -52,6 +59,9 @@ def _summarize_field(field: dict, *, compact: bool) -> dict | None:
                 "mandatory_depends_on": field.get("mandatory_depends_on") or None,
             }
         )
+    elif field.get("default") is not None or field.get("mandatory_depends_on"):
+        item["default"] = field.get("default")
+        item["mandatory_depends_on"] = field.get("mandatory_depends_on") or None
     if fieldtype in {"Link", "Table"} and field.get("options"):
         item["target"] = field["options"]
         item["lookup"] = "frappe_get_link_options" if fieldtype == "Link" else "frappe_get_doctype_schema"
@@ -203,7 +213,14 @@ def register_discovery_tools(mcp, client: FrappeClient, err: Callable[[Exception
                 payload["optional_fieldnames"] = optional_fieldnames
             if params.doctype not in HR_DOCTYPES:
                 payload["note"] = f"'{params.doctype}' is not in the curated HR registry. Verify exact spelling."
-            return dumps(payload)
+            return dumps(
+                payload,
+                max_chars=(
+                    MCP_MAX_VALIDATION_SCHEMA_CHARS
+                    if not params.compact
+                    else None
+                ),
+            )
         except Exception as e:
             return err(e)
 
@@ -294,6 +311,21 @@ def register_discovery_tools(mcp, client: FrappeClient, err: Callable[[Exception
                     "Use only returned existing Link options. Ask the user when choice_required is true. "
                     "Call frappe_get_link_options with search to resolve more values."
                 ),
+                "interaction_policy": {
+                    "ask_at_most_one_grouped_question": True,
+                    "auto_use_live_default": True,
+                    "auto_use_single_available_link": True,
+                    "ask_only_for": [
+                        "missing mandatory fields without a live default",
+                        "multiple valid Link choices",
+                        "business decisions that cannot be inferred safely",
+                    ],
+                    "do_not_ask": [
+                        "fields already supplied by the user",
+                        "optional fields with no business impact",
+                        "whether to proceed after an approval proposal is created",
+                    ],
+                },
                 "lookup_errors": lookup_errors,
                 "can_create": (
                     not any(error["required"] for error in lookup_errors)

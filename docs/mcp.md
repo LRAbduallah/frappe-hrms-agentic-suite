@@ -79,6 +79,23 @@ multiple current values, and stop with an actionable prerequisite message when
 no valid value exists. The live installed schema is authoritative because field
 requirements vary across Frappe HRMS versions.
 
+## Human-friendly creation behavior
+
+The agent should behave like an HR colleague rather than a form wizard:
+
+- reuse information already provided in the conversation;
+- apply a live default or the only available Link record when that is safe;
+- ask one grouped clarification question containing only missing mandatory
+  details or ambiguous Link choices;
+- avoid optional questions unless the value materially changes the operation;
+- call the proposal tool once after preflight passes;
+- treat the UI approval card as the only confirmation step, not a repeated
+  “shall I proceed?” conversation.
+
+The approval validator deliberately requests the complete live schema even
+though normal agent-facing schema responses are compact. This prevents context
+optimization from rejecting valid optional fields during approval.
+
 For broader API orientation, call `frappe_get_api_catalog` only when the
 DocType relationship map is unknown. Compact mode is the default and returns a
 small field/link map plus the follow-up MCP operation for each relationship.

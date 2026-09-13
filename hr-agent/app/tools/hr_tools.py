@@ -210,6 +210,10 @@ def propose_create_document(
     """Propose creating a new Frappe document of any DocType, requiring human approval.
     Executes a pre-flight validation and dry-run check against Frappe before creating the proposal.
 
+    Call this exactly once after required information is complete. Do not ask the
+    user for another chat confirmation after this returns APPROVAL_REQUIRED; the
+    UI approval card is the confirmation step.
+
     Use this for any creation operation: Leave Application, Salary Slip, Expense Claim,
     Leave Policy, Payroll Entry, Employee Onboarding, Job Opening, etc.
 
@@ -262,6 +266,7 @@ def propose_create_document(
         "status": "APPROVAL_REQUIRED",
         "approval_id": req.id,
         "message": f"{doctype} creation queued for human approval before Frappe write (Pre-flight dry run PASSED).",
+        "next_step": "Review and approve the approval card in the UI. No second chat confirmation is required.",
         "doctype": doctype,
         "proposed_fields": parsed,
         "dry_run": "PASSED",
@@ -280,6 +285,10 @@ def propose_update_document(
 ) -> str:
     """Propose updating an existing Frappe document, requiring human approval.
     Executes a pre-flight validation check against Frappe before creating the proposal.
+
+    Call this exactly once after required information is complete. Do not ask the
+    user for another chat confirmation after this returns APPROVAL_REQUIRED; the
+    UI approval card is the confirmation step.
 
     Use this for any update: changing employee department, updating salary structure,
     modifying leave allocation, updating job offer status, etc.
@@ -333,6 +342,7 @@ def propose_update_document(
         "status": "APPROVAL_REQUIRED",
         "approval_id": req.id,
         "message": f"{doctype}/{document_name} update queued for human approval before Frappe write.",
+        "next_step": "Review and approve the approval card in the UI. No second chat confirmation is required.",
         "doctype": doctype,
         "document_name": document_name,
         "proposed_changes": parsed,

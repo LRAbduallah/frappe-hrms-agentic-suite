@@ -27,6 +27,9 @@ FRAPPE_REQUEST_TIMEOUT: float = float(os.environ.get("FRAPPE_REQUEST_TIMEOUT", "
 FRAPPE_SCHEMA_CACHE_TTL: float = float(os.environ.get("FRAPPE_SCHEMA_CACHE_TTL", "300"))
 MCP_MAX_TOOL_RESULT_CHARS: int = int(os.environ.get("MCP_MAX_TOOL_RESULT_CHARS", "12000"))
 MCP_MAX_LIST_ROWS: int = int(os.environ.get("MCP_MAX_LIST_ROWS", "25"))
+MCP_MAX_VALIDATION_SCHEMA_CHARS: int = int(
+    os.environ.get("MCP_MAX_VALIDATION_SCHEMA_CHARS", "100000")
+)
 
 # Server Mode: "production" (safe, no delete) or "admin" (full CRUD + bulk setup)
 ServerMode = Literal["production", "admin"]

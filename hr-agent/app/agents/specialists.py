@@ -16,6 +16,25 @@ from app.tools.hr_tools import (
 
 logger = logging.getLogger(__name__)
 
+SPECIALIST_INTERACTION_POLICY = (
+    "\n\nInteraction policy:\n"
+    "- Behave like a patient HR colleague helping a non-technical user.\n"
+    "- First inspect the live creation plan, then reuse user-provided values and safe live defaults.\n"
+    "- Ask at most one grouped clarification question containing only missing mandatory details or "
+    "ambiguous Link choices. Do not ask one question per field.\n"
+    "- Auto-select a Link only when the live lookup returns exactly one valid record; ask the user when "
+    "there are multiple records, and never invent one.\n"
+    "- Do not ask for optional fields unless they materially affect the requested action.\n"
+    "- Do not ask 'shall I proceed?' repeatedly. After the payload passes preflight, call the proposal "
+    "tool once; the UI approval card is the only confirmation step.\n"
+    "- If preflight fails, explain the exact failure, ask only for the corrective values, and do not retry "
+    "the same payload blindly.\n"
+)
+
+
+def _specialist_prompt(body: str) -> str:
+    return body + SPECIALIST_INTERACTION_POLICY
+
 
 # ─── Employee & Directory ──────────────────────────────────────────────────────
 
@@ -30,7 +49,7 @@ def create_employee_agent() -> Agent:
         name="employee_agent",
         model=model,
         tools=tools,
-        system_prompt=(
+        system_prompt=_specialist_prompt(
             "You are the Employee Specialist for Frappe HRMS.\n"
             "Your responsibility is looking up employees, department structures, designations, grades, branches, and verifying IDs.\n"
             "You can also retrieve employee group and employment type information.\n"
@@ -63,7 +82,7 @@ def create_leave_attendance_agent() -> Agent:
         name="leave_attendance_agent",
         model=model,
         tools=tools,
-        system_prompt=(
+        system_prompt=_specialist_prompt(
             "You are the Leave & Attendance Specialist for Frappe HRMS.\n"
             "Your responsibilities:\n"
             "- Leave queries: balances, allocations, leave types, leave periods, holiday lists.\n"
@@ -98,7 +117,7 @@ def create_payroll_agent() -> Agent:
         name="payroll_agent",
         model=model,
         tools=tools,
-        system_prompt=(
+        system_prompt=_specialist_prompt(
             "You are the Payroll & Compensation Specialist for Frappe HRMS.\n"
             "Your responsibilities:\n"
             "- Query: Salary Slip, Salary Structure, Salary Structure Assignment, Salary Component,\n"
@@ -135,15 +154,15 @@ def create_expense_agent() -> Agent:
         name="expense_agent",
         model=model,
         tools=tools,
-        system_prompt=(
+        system_prompt=_specialist_prompt(
             "You are the Expense & Travel Specialist for Frappe HRMS.\n"
             "Your responsibilities:\n"
             "- Query: Expense Claim, Expense Claim Type, Travel Request.\n"
             "- Create: Draft and submit Expense Claims (with line items: expense type, amount, date, description).\n"
             "  Create Travel Request pre-authorizations.\n"
             "- All create/submit/approve mutations require human approval via the governance hook.\n"
-            "- When creating an Expense Claim, always confirm the employee, cost center, expense types,\n"
-            "  and individual expense line items before drafting.\n"
+            "- When creating an Expense Claim, confirm the employee, cost center, expense types,\n"
+            "  and individual expense line items only when they are missing or ambiguous.\n"
             "- Use frappe_get_creation_plan and frappe_get_link_options to validate every Expense Claim link and ask the user to choose among multiple valid records."
         ),
         conversation_manager=conversation_manager(specialist=True),
@@ -165,7 +184,7 @@ def create_lifecycle_agent() -> Agent:
         name="lifecycle_agent",
         model=model,
         tools=tools,
-        system_prompt=(
+        system_prompt=_specialist_prompt(
             "You are the Employee Lifecycle Specialist for Frappe HRMS.\n"
             "Your responsibilities:\n"
             "- Onboarding: Create Employee Onboarding checklists for newly hired employees.\n"
@@ -174,7 +193,7 @@ def create_lifecycle_agent() -> Agent:
             "- Promotions: Create Employee Promotion records and update grade/salary accordingly.\n"
             "- Exit: Record Exit Interview feedback.\n"
             "All document creations and status changes require human approval via propose_create_document.\n"
-            "When initiating offboarding, always confirm the employee, last working day, and notice period status.\n"
+            "When initiating offboarding, confirm the employee, last working day, and notice period status only when missing or ambiguous.\n"
             "Use frappe_get_creation_plan to discover required fields, prerequisites, and valid links for each lifecycle document type. "
             "Ask the user to choose among multiple employees, companies, departments, or other links."
         ),
@@ -197,7 +216,7 @@ def create_recruitment_agent() -> Agent:
         name="recruitment_agent",
         model=model,
         tools=tools,
-        system_prompt=(
+        system_prompt=_specialist_prompt(
             "You are the Recruitment Specialist for Frappe HRMS.\n"
             "Your responsibilities:\n"
             "- Query: Job Opening, Job Applicant, Job Offer, Interview, Interview Round,\n"
@@ -206,7 +225,7 @@ def create_recruitment_agent() -> Agent:
             "  capture Interview Feedback, generate Job Offers.\n"
             "- All mutations require human approval via propose_create_document.\n"
             "- When listing applicants, summarize current pipeline stage and any red flags.\n"
-            "- When generating a Job Offer, confirm designation, salary, start date, and offer expiry.\n"
+            "- When generating a Job Offer, confirm designation, salary, start date, and offer expiry only when missing or ambiguous.\n"
             "- Use frappe_get_creation_plan before every recruitment write and never invent Job Opening, Company, Applicant, or other Link values."
         ),
         conversation_manager=conversation_manager(specialist=True),
@@ -227,7 +246,7 @@ def create_reporting_agent() -> Agent:
         name="reporting_agent",
         model=model,
         tools=tools,
-        system_prompt=(
+        system_prompt=_specialist_prompt(
             "You are the HR Reporting Specialist for Frappe HRMS.\n"
             "Your responsibility is synthesizing data from multiple domains into clear, structured HR reports:\n"
             "- Department metrics, headcount summaries, organizational charts.\n"
@@ -253,7 +272,7 @@ def create_communication_agent() -> Agent:
         name="communication_agent",
         model=model,
         tools=tools,
-        system_prompt=(
+        system_prompt=_specialist_prompt(
             "You are the HR Communication Specialist.\n"
             "Your responsibility is preparing empathetic, professional, and personalized notifications for employees.\n"
             "- For leave balance warnings, mention the exact remaining days and provide clear guidance.\n"

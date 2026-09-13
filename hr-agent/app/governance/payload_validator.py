@@ -234,7 +234,9 @@ def validate_and_dry_run(tool_name: str, arguments: dict[str, Any]) -> dict[str,
             schema_res = mcp_manager.client.call_tool_sync(
                 tool_use_id="dryrun-schema",
                 name="frappe_get_doctype_schema",
-                arguments={"params": {"doctype": doctype}},
+                # The agent-facing schema is compact by default, but governance
+                # must validate against every installed field before approval.
+                arguments={"params": {"doctype": doctype, "compact": False}},
             )
             parsed = parse_mcp_tool_result(schema_res, "frappe_get_doctype_schema")
             if parsed["status"] == "SUCCESS":
