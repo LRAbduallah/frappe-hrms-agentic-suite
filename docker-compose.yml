@@ -94,6 +94,11 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in .env}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      AGENT_API_KEY: ${AGENT_API_KEY:?Set AGENT_API_KEY in .env}
+      UI_USERNAME: ${UI_USERNAME:-admin}
+      UI_PASSWORD: ${UI_PASSWORD:?Set UI_PASSWORD in .env}
+      UI_AUTH_SECRET: ${UI_AUTH_SECRET:?Set UI_AUTH_SECRET in .env}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
       FRAPPE_MCP_URL: http://mcp-gateway:8800/mcp
       FRAPPE_MCP_BEARER_TOKEN: ${MCP_BEARER_TOKEN:?Set MCP_BEARER_TOKEN in .env}
       LOW_LEAVE_THRESHOLD_DAYS: ${LOW_LEAVE_THRESHOLD_DAYS:-2.0}
@@ -126,6 +131,8 @@ services:
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
         VITE_MODEL_NAME: ${VITE_MODEL_NAME:-hr-agent}
+    environment:
+      AGENT_API_KEY: ${AGENT_API_KEY:?Set AGENT_API_KEY in .env}
     restart: unless-stopped
     ports:
       - "${UI_PORT:-8080}:80"
