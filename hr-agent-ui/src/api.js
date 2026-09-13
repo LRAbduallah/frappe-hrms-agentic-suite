@@ -121,6 +121,32 @@ export const api = {
       const decoder = new TextDecoder('utf-8')
       let accumulated = ''
       let pending = ''
+      let finished = false
+
+      const processLine = (line) => {
+        const trimmed = line.trim()
+        if (!trimmed || !trimmed.startsWith('data:')) return
+
+        const payload = trimmed.slice(5).trim()
+        if (payload === '[DONE]') {
+          finished = true
+          return
+        }
+
+        try {
+          const parsed = JSON.parse(payload)
+          const status = parsed.agent_status?.message
+          if (status && onStatus) onStatus(status)
+          const token = parsed.choices?.[0]?.delta?.content || ''
+          if (token) {
+            accumulated += token
+            if (onChunk) onChunk(token, accumulated)
+          }
+        } catch {
+          // A complete SSE line should contain valid JSON; leave malformed data visible in logs.
+          console.warn('Ignoring malformed chat SSE payload')
+        }
+      }
 
       while (true) {
         const { done, value } = await reader.read()
@@ -131,30 +157,14 @@ export const api = {
         pending = lines.pop() || ''
 
         for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed || !trimmed.startsWith('data: ')) continue
-
-          const payload = trimmed.replace('data: ', '').trim()
-          if (payload === '[DONE]') {
-            if (onDone) onDone(accumulated)
-            return
-          }
-
-          try {
-            const parsed = JSON.parse(payload)
-            const status = parsed.agent_status?.message
-            if (status && onStatus) onStatus(status)
-            const token = parsed.choices?.[0]?.delta?.content || ''
-            if (token) {
-              accumulated += token
-              if (onChunk) onChunk(token, accumulated)
-            }
-          } catch (e) {
-            // Ignore incomplete frames
-          }
+          processLine(line)
+          if (finished) break
         }
+        if (finished) break
       }
 
+      pending += decoder.decode()
+      if (!finished && pending.trim()) processLine(pending)
       if (onDone) onDone(accumulated)
     } catch (err) {
       if (onError) onError(err)

@@ -110,6 +110,22 @@ def _friendly_tool_name(tool_name: str) -> str:
     return labels.get(tool_name, tool_name.replace("_", " "))
 
 
+def _final_result_text(result: Any) -> str:
+    """Extract text from Strands' final AgentResult when no delta was emitted."""
+    message = getattr(result, "message", None)
+    if message is None and isinstance(result, dict):
+        message = result.get("message")
+    content = message.get("content") if isinstance(message, dict) else getattr(message, "content", None)
+    if not isinstance(content, list):
+        return ""
+    text_parts = []
+    for item in content:
+        text = item.get("text") if isinstance(item, dict) else getattr(item, "text", None)
+        if isinstance(text, str):
+            text_parts.append(text)
+    return "".join(text_parts)
+
+
 async def generate_stream_response(
     prompt: str, model: str, completion_id: str, session_id: str
 ) -> AsyncGenerator[str, None]:
@@ -118,6 +134,7 @@ async def generate_stream_response(
         agent = create_orchestrator(session_id=session_id)
         yield _status_event("Planning your request")
         last_tool_name = None
+        emitted_text = False
         async for event in agent.stream_async(prompt):
             current_tool = event.get("current_tool_use") if isinstance(event, dict) else None
             tool_name = current_tool.get("name") if isinstance(current_tool, dict) else None
@@ -132,10 +149,16 @@ async def generate_stream_response(
 
             text = event.get("data") if isinstance(event, dict) else None
             if isinstance(text, str) and text:
+                emitted_text = True
                 if last_tool_name:
                     yield _status_event("Writing response")
                     last_tool_name = None
                 yield _stream_chunk(text, model, completion_id, created)
+            elif isinstance(event, dict) and not emitted_text and event.get("result") is not None:
+                final_text = _final_result_text(event["result"])
+                if final_text:
+                    emitted_text = True
+                    yield _stream_chunk(final_text, model, completion_id, created)
     except Exception as exc:
         logger.error(f"Error streaming HR agent response: {exc}", exc_info=True)
         error_text = (
