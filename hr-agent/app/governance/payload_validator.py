@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+from datetime import date
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -282,6 +283,71 @@ def validate_and_dry_run(
             for f in schema_data.get("fields", [])
             if f.get("fieldname")
         }
+        # Apply deterministic live defaults before checking required fields.
+        # This keeps the model from turning a resolvable Frappe default into a
+        # needless clarification question.
+        for fieldname, field in schema_fields.items():
+            if fieldname in fields or not (field.get("required") or field.get("reqd")):
+                continue
+            default = field.get("default")
+            if default not in (None, ""):
+                fields[fieldname] = date.today().isoformat() if default == "Today" else default
+                checks.append({
+                    "name": f"Live default: {fieldname}",
+                    "status": "PASSED",
+                    "detail": f"Applied the DocType default '{fields[fieldname]}'.",
+                })
+                continue
+            if field.get("fieldtype") == "Select":
+                options = [
+                    option.strip()
+                    for option in str(field.get("options") or "").splitlines()
+                    if option.strip()
+                ]
+                if not options and isinstance(field.get("enum"), list):
+                    options = [str(option).strip() for option in field["enum"] if str(option).strip()]
+                if len(options) == 1:
+                    fields[fieldname] = options[0]
+                    checks.append({
+                        "name": f"Single option: {fieldname}",
+                        "status": "PASSED",
+                        "detail": f"Applied the only valid option '{options[0]}'.",
+                    })
+
+        # Frappe marks some derived values (notably Leave Application.company)
+        # as required and read-only. Resolve those from the selected employee
+        # rather than asking the user to repeat data already in HRMS.
+        employee_id = fields.get("employee")
+        if employee_id and isinstance(employee_id, str):
+            try:
+                employee_res = mcp_manager.client.call_tool_sync(
+                    tool_use_id="dryrun-employee-defaults",
+                    name="frappe_get_document",
+                    arguments={"params": {"doctype": "Employee", "name": employee_id}},
+                )
+                employee_result = parse_mcp_tool_result(employee_res, "frappe_get_document")
+                if employee_result["status"] == "SUCCESS":
+                    employee_payload = json.loads(employee_result.get("frappe_response", "{}"))
+                    employee_doc = employee_payload.get("data", employee_payload)
+                    if isinstance(employee_doc, dict):
+                        for fieldname, field in schema_fields.items():
+                            if (
+                                fieldname in fields
+                                or not (field.get("required") or field.get("reqd"))
+                                or not field.get("read_only")
+                            ):
+                                continue
+                            linked_value = employee_doc.get(fieldname)
+                            if linked_value not in (None, ""):
+                                fields[fieldname] = linked_value
+                                checks.append({
+                                    "name": f"Employee default: {fieldname}",
+                                    "status": "PASSED",
+                                    "detail": f"Resolved from Employee '{employee_id}'.",
+                                })
+            except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                warnings.append(f"Could not derive required employee defaults: {exc}")
+
         valid_fieldnames = set(schema_fields)
         unknown_fields = [k for k in fields.keys() if k not in valid_fieldnames and k != "doctype"]
         required_fields = {
