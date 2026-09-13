@@ -72,6 +72,7 @@ class MCPManager:
         "frappe_list_documents",
         "frappe_get_link_options",
         "frappe_get_doctype_schema",
+        "frappe_get_creation_plan",
         "hrms_list_doctypes",
         "hrms_find_employee",
         "hrms_search_employees",

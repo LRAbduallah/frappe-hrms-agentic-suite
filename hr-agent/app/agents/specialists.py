@@ -35,7 +35,8 @@ def create_employee_agent() -> Agent:
             "You can also retrieve employee group and employment type information.\n"
             "You may CREATE or UPDATE Employee master records when explicitly requested — always propose mutations via the governance hook.\n"
             "Never invent employee data. If search returns multiple matches, present them clearly to disambiguate.\n"
-            "Use frappe_get_doctype_schema to understand field names before creating/updating documents."
+            "Before creating/updating, call frappe_get_creation_plan and use only its live field names and Link options. "
+            "Ask the user to choose when multiple companies, departments, or other linked records exist."
         ),
         hooks=[HRAgentGovernanceHook()],
     )
@@ -71,7 +72,8 @@ def create_leave_attendance_agent() -> Agent:
             "- Shift actions: create Shift Assignment, Shift Request.\n"
             "- Critically low leave is defined as <= 2.0 days remaining.\n"
             "Always retrieve authoritative facts from Frappe before making recommendations.\n"
-            "Use frappe_get_doctype_schema to understand required fields before creating documents."
+            "Before creating, call frappe_get_creation_plan to resolve required fields, prerequisites, and real Link options. "
+            "Never choose the first Company, Employee, Leave Type, or other linked record silently."
         ),
         hooks=[HRAgentGovernanceHook()],
     )
@@ -105,7 +107,7 @@ def create_payroll_agent() -> Agent:
             "  and that a Holiday List exists in Frappe. If propose_create_document returns VALIDATION_FAILED,\n"
             "  inform the user clearly of what prerequisites are missing rather than retrying blindly.\n"
             "- When asked to 'run payroll' for a period, clarify the company, payroll frequency, and date range first.\n"
-            "- Use frappe_get_doctype_schema to discover required fields before building document payloads.\n"
+            "- Use frappe_get_creation_plan to discover required fields, prerequisites, child tables, and real Link values before building payloads.\n"
             "- Present salary figures with currency context. Never expose raw employee financial data without confirming authorization."
         ),
         hooks=[HRAgentGovernanceHook()],
@@ -135,7 +137,7 @@ def create_expense_agent() -> Agent:
             "- All create/submit/approve mutations require human approval via the governance hook.\n"
             "- When creating an Expense Claim, always confirm the employee, cost center, expense types,\n"
             "  and individual expense line items before drafting.\n"
-            "- Use frappe_get_link_options to validate Expense Claim Types available in the system."
+            "- Use frappe_get_creation_plan and frappe_get_link_options to validate every Expense Claim link and ask the user to choose among multiple valid records."
         ),
         hooks=[HRAgentGovernanceHook()],
     )
@@ -165,7 +167,8 @@ def create_lifecycle_agent() -> Agent:
             "- Exit: Record Exit Interview feedback.\n"
             "All document creations and status changes require human approval via propose_create_document.\n"
             "When initiating offboarding, always confirm the employee, last working day, and notice period status.\n"
-            "Use frappe_get_doctype_schema to discover required fields for each lifecycle document type."
+            "Use frappe_get_creation_plan to discover required fields, prerequisites, and valid links for each lifecycle document type. "
+            "Ask the user to choose among multiple employees, companies, departments, or other links."
         ),
         hooks=[HRAgentGovernanceHook()],
     )
@@ -194,7 +197,8 @@ def create_recruitment_agent() -> Agent:
             "  capture Interview Feedback, generate Job Offers.\n"
             "- All mutations require human approval via propose_create_document.\n"
             "- When listing applicants, summarize current pipeline stage and any red flags.\n"
-            "- When generating a Job Offer, confirm designation, salary, start date, and offer expiry."
+            "- When generating a Job Offer, confirm designation, salary, start date, and offer expiry.\n"
+            "- Use frappe_get_creation_plan before every recruitment write and never invent Job Opening, Company, Applicant, or other Link values."
         ),
         hooks=[HRAgentGovernanceHook()],
     )

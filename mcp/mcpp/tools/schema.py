@@ -20,6 +20,25 @@ class SchemaInput(BaseModel):
 	doctype: str = Field(..., description="Exact Frappe DocType name, e.g. 'Employee', 'Leave Application'")
 
 
+class CreationPlanInput(BaseModel):
+	model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+	doctype: str = Field(
+		...,
+		min_length=1,
+		description="Exact Frappe DocType name to prepare for creation.",
+	)
+	link_option_limit: int = Field(
+		default=20,
+		ge=1,
+		le=100,
+		description="Maximum real existing options returned for each Link field.",
+	)
+	include_optional_links: bool = Field(
+		default=True,
+		description="Also resolve optional Link fields so the agent can ask for valid choices instead of guessing.",
+	)
+
+
 class LinkOptionsInput(BaseModel):
 	model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 	target_doctype: str = Field(
@@ -54,18 +73,31 @@ class GetDocInput(BaseModel):
 
 class CreateDocInput(BaseModel):
 	model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
-	doctype: str = Field(..., description="DocType name, e.g. 'Employee', 'Salary Structure'")
+	doctype: str = Field(
+		...,
+		min_length=1,
+		description="Exact Frappe DocType name. Discover and verify it before creating.",
+	)
 	fields: dict[str, Any] = Field(
 		...,
-		description="Field values for new document. Use frappe_get_doctype_schema first to verify field names.",
+		min_length=1,
+		description=(
+			"Field values for the new document. Use frappe_get_creation_plan first; "
+			"send exact fieldnames, real Link values from the returned options, and child-table rows "
+			"as arrays of objects."
+		),
 	)
 
 
 class UpdateDocInput(BaseModel):
 	model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
-	doctype: str = Field(..., description="DocType name")
-	name: str = Field(..., description="Document name/ID to update")
-	fields: dict[str, Any] = Field(..., description="Key-value pairs to update on the document")
+	doctype: str = Field(..., min_length=1, description="Exact Frappe DocType name.")
+	name: str = Field(..., min_length=1, description="Existing document name/ID to update.")
+	fields: dict[str, Any] = Field(
+		...,
+		min_length=1,
+		description="Exact schema fieldnames and new values; do not invent or silently drop fields.",
+	)
 
 
 class DeleteDocInput(BaseModel):
@@ -93,7 +125,7 @@ class MarkAttendanceInput(BaseModel):
 	model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 	employee: str = Field(..., description="Employee ID, e.g. 'HR-EMP-00001'")
 	attendance_date: str = Field(..., description="Date (YYYY-MM-DD)")
-	status: Literal["Present", "Absent", "Half Day", "On Leave"] = Field(
+	status: Literal["Present", "Absent", "Half Day", "On Leave", "Work From Home"] = Field(
 		..., description="Attendance status to mark"
 	)
 	working_hours: Optional[float] = Field(default=None, description="Working hours completed")

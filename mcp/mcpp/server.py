@@ -38,20 +38,26 @@ def build_server(mode: Optional[ServerMode] = None) -> MCPServer:
     instructions = (
         f"You are connected to a Frappe HRMS instance operating in '{active_mode.upper()}' mode.\n\n"
         "1. Schema Discovery: Before creating or modifying documents, call 'hrms_list_doctypes' "
-        "to discover available DocTypes, 'frappe_get_doctype_schema' to check required fields, "
-        "and 'frappe_get_link_options' to validate foreign keys (e.g. Department, Leave Type).\n"
-        "2. Workflow Compliance: Submittable documents (Leave Applications, Salary Slips, "
+        "when the exact DocType is uncertain, then call 'frappe_get_creation_plan'. It returns "
+        "the live installed schema, required fields, child tables, workflow rules, prerequisites, "
+        "and current valid Link values. Use 'frappe_get_doctype_schema' for detail and "
+        "'frappe_get_link_options' for a targeted lookup.\n"
+        "2. Link Selection: Never invent or silently choose Company, Employee, Department, "
+        "Designation, Leave Type, Currency, Cost Center, or any other Link value. Use only "
+        "records returned by Frappe. If multiple options exist, ask the user to choose; if none "
+        "exist, stop and explain which prerequisite must be created first.\n"
+        "3. Workflow Compliance: Submittable documents (Leave Applications, Salary Slips, "
         "Attendance) require 'frappe_submit_document' to take legal/financial effect.\n"
     )
 
     if active_mode == "production":
         instructions += (
-            "3. Safety Policy: PRODUCTION STREAM MODE IS ACTIVE. Deletion of documents is disabled. "
+            "4. Safety Policy: PRODUCTION STREAM MODE IS ACTIVE. Deletion of documents is disabled. "
             "Only Read, Create, and Update operations are permitted.\n"
         )
     else:
         instructions += (
-            "3. Admin Policy: ADMIN / SETUP MODE IS ACTIVE. Full CRUD is enabled, including "
+            "4. Admin Policy: ADMIN / SETUP MODE IS ACTIVE. Full CRUD is enabled, including "
             "frappe_delete_document and frappe_bulk_create_documents for data seeding.\n"
         )
 

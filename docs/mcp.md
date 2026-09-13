@@ -37,7 +37,7 @@ setup or migration windows.
 
 | Group | Examples |
 | --- | --- |
-| Discovery | `hrms_list_doctypes`, `frappe_get_doctype_schema`, `frappe_get_link_options` |
+| Discovery | `hrms_list_doctypes`, `frappe_get_creation_plan`, `frappe_get_doctype_schema`, `frappe_get_link_options` |
 | Documents | `frappe_list_documents`, `frappe_get_document`, `frappe_create_document`, `frappe_update_document` |
 | Workflow | `frappe_submit_document`, `frappe_cancel_document`, `frappe_get_document_history` |
 | Leave | `hrms_find_employee`, `hrms_get_leave_balance`, `hrms_apply_leave` |
@@ -55,12 +55,47 @@ setup or migration windows.
 5. Confirm the returned document name and read the document back from Frappe.
 6. Submit separately when required.
 7. Read the result or history for confirmation.
+```
 
 Approval execution is fail-closed: an unavailable MCP gateway, invalid schema
 payload, Frappe error, missing created document name, or failed read-back
 verification marks the approval as `FAILED`; it is never reported as a
 successful or simulated write.
-```
+
+## Schema and dependency map
+
+Before a create or update, call `frappe_get_creation_plan`. It combines the
+installed Frappe DocType metadata with the MCP dependency map and returns:
+
+- required fields, field types, defaults, conditional dependencies, and child tables;
+- the target DocType for every Link field;
+- real current Link values from Frappe, with `choice_required` when multiple
+  values exist;
+- prerequisites and post-create workflow guidance.
+
+The agent must never select the first Company, Employee, Department, Leave Type,
+Currency, Account, or approver silently. It must ask the user to choose among
+multiple current values, and stop with an actionable prerequisite message when
+no valid value exists. The live installed schema is authoritative because field
+requirements vary across Frappe HRMS versions.
+
+The curated workflow guidance is based on the official Frappe HR documentation
+and public HRMS DocType definitions, including:
+
+- [Employee](https://docs.frappe.io/hr/employee)
+- [Leave Application](https://docs.frappe.io/hr/leave-application)
+- [Leave Allocation](https://docs.frappe.io/hr/leave-allocation)
+- [Attendance](https://docs.frappe.io/hr/attendance)
+- [Salary Structure Assignment](https://docs.frappe.io/hr/salary-structure-assignment)
+- [Salary Slip](https://docs.frappe.io/hr/salary-slip)
+- [Expense Claim](https://docs.frappe.io/hr/expense-claim)
+- [Job Opening](https://docs.frappe.io/hr/job-opening)
+- [Job Applicant](https://docs.frappe.io/hr/job-applicant)
+- [Employee Transfer](https://docs.frappe.io/hr/employee-transfer)
+- [Employee Promotion](https://docs.frappe.io/hr/employee-promotion)
+
+These references provide workflow guidance only; the running Frappe instance
+remains the source of truth for exact fields, permissions, and available links.
 
 `hrms_apply_leave` creates a Leave Application but does not submit it. Generic
 bulk creation is sequential and is not transactional; earlier records remain if
