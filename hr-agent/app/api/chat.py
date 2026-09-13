@@ -104,6 +104,7 @@ def _friendly_tool_name(tool_name: str) -> str:
         "frappe_get_creation_plan": "the HRMS creation plan",
         "frappe_get_api_catalog": "the HRMS API map",
         "frappe_get_link_options": "valid HRMS options",
+        "frappe_create_workflow": "a dependency workflow",
         "hrms_find_employee": "employee records",
         "hrms_search_employees": "employee records",
         "hrms_get_leave_balance": "leave balances",
@@ -195,8 +196,18 @@ async def chat_completions(req: ChatCompletionRequest):
     if failed_approvals:
         failure_lines = []
         for item in failed_approvals:
-            raw = (item.result or {}).get("message", "execution failed") if isinstance(item.result, dict) else item.result
+            raw_result = item.result if isinstance(item.result, dict) else {}
+            raw = raw_result.get("message", "execution failed") if raw_result else item.result
             message = str(raw)[:240]
+            if raw_result.get("failed_step"):
+                completed = ", ".join(
+                    f"{step_id}={step_data.get('name') or step_data.get('created_name')}"
+                    for step_id, step_data in raw_result.get("completed_steps", {}).items()
+                )
+                message = (
+                    f"{message} failed_step={raw_result['failed_step']}; "
+                    f"completed={completed or 'none'}"
+                )[:400]
             failure_lines.append(f"- {item.action}: {message}")
             memory.record_failure(message)
         last_user_message = (

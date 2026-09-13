@@ -79,6 +79,44 @@ multiple current values, and stop with an actionable prerequisite message when
 no valid value exists. The live installed schema is authoritative because field
 requirements vary across Frappe HRMS versions.
 
+When a user explicitly provides a concrete name for a missing prerequisite
+master record, the agent should use `propose_create_workflow` instead of asking
+the user to verify the same value. The workflow is one approval containing
+dependency-ordered create steps, for example:
+
+```json
+[
+  {
+    "id": "department",
+    "doctype": "Department",
+    "fields": {"department_name": "Engineering", "company": "Acme"}
+  },
+  {
+    "id": "designation",
+    "doctype": "Designation",
+    "fields": {"designation_name": "Senior Python Developer"}
+  },
+  {
+    "id": "employee",
+    "doctype": "Employee",
+    "fields": {
+      "employee_name": "Alex Example",
+      "department": {"$ref": "department.name"},
+      "designation": {"$ref": "designation.name"}
+    }
+  }
+]
+```
+
+Each step is validated against its current live schema before the approval is
+created. On approval, steps execute sequentially, each created document is
+read back, and its actual Frappe name replaces later `$ref` values. If a step
+fails, execution stops and the approval records the completed steps and the
+failed step; it is never reported as a successful final document. A missing
+prerequisite is only auto-created when the user clearly requested that named
+record. Ambiguous matches or missing mandatory prerequisite fields still
+produce one grouped clarification question.
+
 ## Human-friendly creation behavior
 
 The agent should behave like an HR colleague rather than a form wizard:
@@ -88,6 +126,8 @@ The agent should behave like an HR colleague rather than a form wizard:
 - ask one grouped clarification question containing only missing mandatory
   details or ambiguous Link choices;
 - avoid optional questions unless the value materially changes the operation;
+- automatically chain clearly requested missing master data through
+  `propose_create_workflow` instead of asking the user to confirm a live lookup;
 - call the proposal tool once after preflight passes;
 - treat the UI approval card as the only confirmation step, not a repeated
   “shall I proceed?” conversation.

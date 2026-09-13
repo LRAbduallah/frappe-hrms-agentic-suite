@@ -11,6 +11,7 @@ from app.tools.hr_tools import (
     propose_attendance_correction,
     propose_send_email,
     propose_create_document,
+    propose_create_workflow,
     propose_update_document,
 )
 
@@ -27,6 +28,10 @@ SPECIALIST_INTERACTION_POLICY = (
     "- Do not ask for optional fields unless they materially affect the requested action.\n"
     "- Do not ask 'shall I proceed?' repeatedly. After the payload passes preflight, call the proposal "
     "tool once; the UI approval card is the only confirmation step.\n"
+    "- If a clearly requested prerequisite Link does not exist, do not ask the user to verify it. "
+    "Inspect its live creation plan and use propose_create_workflow to create the prerequisite first, "
+    "then pass its returned name into the dependent document. Ask only when the requested value is "
+    "ambiguous or the prerequisite requires missing mandatory information.\n"
     "- If preflight fails, explain the exact failure, ask only for the corrective values, and do not retry "
     "the same payload blindly.\n"
 )
@@ -42,7 +47,7 @@ def create_employee_agent() -> Agent:
     """Specialist: employee identity, directory, department, profiles, org chart."""
     model = get_model()
     mcp_tools = mcp_manager.get_tools_for_employee_agent()
-    approval_tools = [propose_create_document, propose_update_document]
+    approval_tools = [propose_create_document, propose_create_workflow, propose_update_document]
     tools = mcp_tools + approval_tools if mcp_tools else [search_employees] + approval_tools
 
     return Agent(
@@ -70,7 +75,12 @@ def create_leave_attendance_agent() -> Agent:
     """Specialist: leave allocations, balances, policies, attendance, shifts, corrections."""
     model = get_model()
     mcp_tools = mcp_manager.get_tools_for_leave_agent()
-    approval_tools = [propose_attendance_correction, propose_create_document, propose_update_document]
+    approval_tools = [
+        propose_attendance_correction,
+        propose_create_document,
+        propose_create_workflow,
+        propose_update_document,
+    ]
     base_tools = [
         get_leave_balance,
         get_attendance_history,
@@ -109,7 +119,7 @@ def create_payroll_agent() -> Agent:
     """Specialist: salary slips, payroll entries, salary structures, components, advances, loans."""
     model = get_model()
     mcp_tools = mcp_manager.get_tools_for_payroll_agent()
-    approval_tools = [propose_create_document, propose_update_document]
+    approval_tools = [propose_create_document, propose_create_workflow, propose_update_document]
     base_tools = [search_employees, get_leave_balance]
     tools = mcp_tools + approval_tools if mcp_tools else base_tools + approval_tools
 
@@ -146,7 +156,7 @@ def create_expense_agent() -> Agent:
     """Specialist: expense claims, travel requests, reimbursements."""
     model = get_model()
     mcp_tools = mcp_manager.get_tools_for_expense_agent()
-    approval_tools = [propose_create_document, propose_update_document]
+    approval_tools = [propose_create_document, propose_create_workflow, propose_update_document]
     base_tools = [search_employees]
     tools = mcp_tools + approval_tools if mcp_tools else base_tools + approval_tools
 
@@ -176,7 +186,7 @@ def create_lifecycle_agent() -> Agent:
     """Specialist: onboarding, separation, transfer, promotion, exit interviews."""
     model = get_model()
     mcp_tools = mcp_manager.get_tools_for_lifecycle_agent()
-    approval_tools = [propose_create_document, propose_update_document]
+    approval_tools = [propose_create_document, propose_create_workflow, propose_update_document]
     base_tools = [search_employees]
     tools = mcp_tools + approval_tools if mcp_tools else base_tools + approval_tools
 
@@ -208,7 +218,7 @@ def create_recruitment_agent() -> Agent:
     """Specialist: job openings, applicants, interviews, offers, staffing plans."""
     model = get_model()
     mcp_tools = mcp_manager.get_tools_for_recruitment_agent()
-    approval_tools = [propose_create_document, propose_update_document]
+    approval_tools = [propose_create_document, propose_create_workflow, propose_update_document]
     base_tools = [search_employees]
     tools = mcp_tools + approval_tools if mcp_tools else base_tools + approval_tools
 

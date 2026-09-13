@@ -270,6 +270,9 @@ export function ApprovalsPanel({ approvals, onApprove, onReject, onDryRun, onRef
           filteredApprovals.map((req) => {
             const isExpanded = expandedId === req.id
             const isBusy = actionInProgress === req.id
+            const workflowSteps = req.tool_name === 'frappe_create_workflow'
+              ? (req.arguments?.steps || [])
+              : []
 
             return (
               <div
@@ -292,6 +295,37 @@ export function ApprovalsPanel({ approvals, onApprove, onReject, onDryRun, onRef
                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                   {req.reason}
                 </div>
+
+                {workflowSteps.length > 0 && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '5px',
+                      alignItems: 'center',
+                      fontSize: '11px',
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
+                    <span style={{ color: 'var(--text-muted)' }}>Workflow:</span>
+                    {workflowSteps.map((step, index) => (
+                      <React.Fragment key={step.id || index}>
+                        {index > 0 && <span style={{ color: 'var(--text-muted)' }}>→</span>}
+                        <span
+                          style={{
+                            padding: '2px 6px',
+                            borderRadius: '999px',
+                            background: 'rgba(80, 227, 194, 0.08)',
+                            border: '1px solid rgba(80, 227, 194, 0.18)',
+                            color: 'var(--text-primary)',
+                          }}
+                        >
+                          {step.doctype || step.id}
+                        </span>
+                      </React.Fragment>
+                    ))}
+                  </div>
+                )}
 
                 {req.preflight && (
                   <div

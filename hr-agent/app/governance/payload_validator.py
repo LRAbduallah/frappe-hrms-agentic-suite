@@ -185,7 +185,12 @@ def parse_mcp_tool_result(result: dict[str, Any], tool_name: str) -> dict[str, A
     }
 
 
-def validate_and_dry_run(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+def validate_and_dry_run(
+    tool_name: str,
+    arguments: dict[str, Any],
+    *,
+    allow_references: bool = False,
+) -> dict[str, Any]:
     """Perform pre-flight payload validation and dry-run prerequisite checks against Frappe.
 
     Returns:
@@ -319,6 +324,18 @@ def validate_and_dry_run(tool_name: str, arguments: dict[str, Any]) -> dict[str,
             if not field or value in (None, ""):
                 continue
 
+            if (
+                allow_references
+                and isinstance(value, dict)
+                and isinstance(value.get("$ref"), str)
+            ):
+                checks.append({
+                    "name": f"Deferred value: {fieldname}",
+                    "status": "PASSED",
+                    "detail": f"Resolved after prerequisite step: {value['$ref']}.",
+                })
+                continue
+
             if field.get("fieldtype") == "Link":
                 target_doctype = field.get("options")
                 if target_doctype:
@@ -393,7 +410,11 @@ def validate_and_dry_run(tool_name: str, arguments: dict[str, Any]) -> dict[str,
         or inner.get("employee")
         or inner.get("employee_id")
     )
-    if emp_id:
+    if emp_id and not (
+        allow_references
+        and isinstance(emp_id, dict)
+        and isinstance(emp_id.get("$ref"), str)
+    ):
         try:
             emp_res = mcp_manager.client.call_tool_sync(
                 tool_use_id="dryrun-emp",
@@ -546,4 +567,86 @@ def validate_and_dry_run(tool_name: str, arguments: dict[str, Any]) -> dict[str,
         "checks": checks,
         "errors": errors,
         "warnings": warnings,
+    }
+
+
+def validate_create_workflow(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Validate a dependency-ordered create workflow before one approval is shown."""
+    steps = arguments.get("steps") if isinstance(arguments, dict) else None
+    if not isinstance(steps, list) or not steps:
+        return {
+            "valid": False,
+            "dry_run_passed": False,
+            "checks": [],
+            "errors": ["A create workflow must contain at least one step."],
+            "warnings": [],
+        }
+    if len(steps) > 6:
+        return {
+            "valid": False,
+            "dry_run_passed": False,
+            "checks": [],
+            "errors": ["A create workflow may contain at most six dependency-ordered steps."],
+            "warnings": [],
+        }
+
+    checks: list[dict[str, Any]] = []
+    errors: list[str] = []
+    warnings: list[str] = []
+    step_ids: set[str] = set()
+
+    def workflow_references(value: Any) -> list[str]:
+        if isinstance(value, list):
+            return [ref for item in value for ref in workflow_references(item)]
+        if isinstance(value, dict):
+            if set(value) == {"$ref"} and isinstance(value["$ref"], str):
+                return [value["$ref"]]
+            return [ref for item in value.values() for ref in workflow_references(item)]
+        return []
+
+    for index, step in enumerate(steps, start=1):
+        if not isinstance(step, dict):
+            errors.append(f"Workflow step {index} must be an object.")
+            continue
+        step_id = str(step.get("id", "")).strip()
+        doctype = str(step.get("doctype", "")).strip()
+        fields = step.get("fields")
+        if not step_id or step_id in step_ids:
+            errors.append(f"Workflow step {index} must have a unique id.")
+            continue
+        step_ids.add(step_id)
+        if not doctype:
+            errors.append(f"Workflow step '{step_id}' is missing its DocType.")
+            continue
+        if not isinstance(fields, dict) or not fields:
+            errors.append(f"Workflow step '{step_id}' has no fields.")
+            continue
+        for reference in workflow_references(fields):
+            referenced_step = reference.split(".", 1)[0]
+            if "." not in reference or referenced_step not in step_ids:
+                errors.append(
+                    f"Workflow step '{step_id}' references '{reference}', "
+                    "but references must target an earlier workflow step."
+                )
+
+        result = validate_and_dry_run(
+            "frappe_create_document",
+            {"doctype": doctype, "fields": fields},
+            allow_references=True,
+        )
+        checks.append({
+            "name": f"Workflow step: {step_id}",
+            "status": "PASSED" if result.get("dry_run_passed") else "FAILED",
+            "detail": f"{doctype}: {len(result.get('checks', []))} checks completed.",
+        })
+        errors.extend(f"Step '{step_id}': {error}" for error in result.get("errors", []))
+        warnings.extend(f"Step '{step_id}': {warning}" for warning in result.get("warnings", []))
+
+    return {
+        "valid": not errors,
+        "dry_run_passed": not errors,
+        "checks": checks,
+        "errors": errors,
+        "warnings": warnings,
+        "steps": len(steps),
     }

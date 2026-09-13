@@ -277,6 +277,79 @@ def propose_create_document(
 
 
 @tool
+def propose_create_workflow(
+    steps: str,
+    reason: str,
+) -> str:
+    """Propose one dependency-aware create workflow under a single approval.
+
+    Use this when the requested document names a missing prerequisite such as a
+    Department, Designation, Company, Leave Type, or Employee. Resolve every
+    existing Link first. If a clearly requested prerequisite is absent, put its
+    creation before the dependent document and reference its future name with
+    {"$ref": "step_id.name"}.
+
+    The steps must be a JSON array in dependency order. Each step is:
+    {"id": "department", "doctype": "Department", "fields": {...}}
+
+    Do not use this to invent prerequisites or to create records the user did
+    not request. The UI approval card is the single confirmation step.
+    """
+    from app.governance.payload_validator import validate_create_workflow
+
+    try:
+        parsed = json.loads(steps) if isinstance(steps, str) else steps
+    except (json.JSONDecodeError, TypeError):
+        parsed = None
+
+    workflow_args = {"steps": parsed}
+    preflight = validate_create_workflow(workflow_args)
+    if not preflight.get("dry_run_passed", False):
+        error_summary = "; ".join(preflight.get("errors", []))
+        return json.dumps({
+            "status": "VALIDATION_FAILED",
+            "message": f"Pre-flight workflow check failed: {error_summary}",
+            "errors": preflight.get("errors", []),
+            "warnings": preflight.get("warnings", []),
+            "checks": preflight.get("checks", []),
+        }, indent=2)
+
+    financial_doctypes = {
+        "Salary Slip", "Payroll Entry", "Additional Salary", "Employee Advance",
+        "Loan", "Expense Claim", "Leave Encashment", "Employee Benefit Claim",
+    }
+    risk = RiskLevel.HIGH if any(
+        isinstance(step, dict) and step.get("doctype") in financial_doctypes
+        for step in parsed
+    ) else RiskLevel.MEDIUM
+    req = approval_store.create(
+        session_id="default",
+        action=f"Create dependent HR records ({len(parsed)} steps)",
+        tool_name="frappe_create_workflow",
+        arguments={"steps": parsed},
+        reason=reason,
+        risk_level=risk,
+        preflight=preflight,
+    )
+    return json.dumps({
+        "status": "APPROVAL_REQUIRED",
+        "approval_id": req.id,
+        "message": (
+            f"{len(parsed)} dependent HR record(s) queued as one workflow for approval. "
+            "Prerequisites will be created first and their names passed to later steps."
+        ),
+        "next_step": "Review and approve the single workflow card in the UI. No second chat confirmation is required.",
+        "steps": [
+            {"id": step.get("id"), "doctype": step.get("doctype")}
+            for step in parsed
+        ],
+        "dry_run": "PASSED",
+        "checks": preflight.get("checks", []),
+        "warnings": preflight.get("warnings", []),
+    }, indent=2)
+
+
+@tool
 def propose_update_document(
     doctype: str,
     document_name: str,

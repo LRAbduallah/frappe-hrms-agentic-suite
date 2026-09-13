@@ -1,6 +1,7 @@
 import json
 import logging
 import uuid
+from datetime import datetime
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -19,6 +20,76 @@ logger = logging.getLogger(__name__)
 class ApprovalDecision(BaseModel):
     approved_by: str = "hr_manager"
     comment: str | None = None
+
+
+def _resolve_workflow_refs(value: Any, results: dict[str, dict[str, Any]]) -> Any:
+    """Resolve {"$ref": "step_id.name"} values after prerequisite creation."""
+    if isinstance(value, list):
+        return [_resolve_workflow_refs(item, results) for item in value]
+    if not isinstance(value, dict):
+        return value
+    if set(value) == {"$ref"}:
+        reference = value["$ref"]
+        if not isinstance(reference, str) or "." not in reference:
+            raise ValueError(f"Invalid workflow reference: {reference!r}")
+        step_id, attribute = reference.split(".", 1)
+        if step_id not in results:
+            raise ValueError(f"Workflow reference points to incomplete step '{step_id}'.")
+        resolved = results[step_id].get(attribute)
+        if resolved in (None, ""):
+            raise ValueError(f"Workflow step '{step_id}' did not produce '{attribute}'.")
+        return resolved
+    return {key: _resolve_workflow_refs(item, results) for key, item in value.items()}
+
+
+def _execute_create_workflow(steps: list[dict[str, Any]]) -> dict[str, Any]:
+    """Execute dependency-ordered creates and stop visibly at the first failure."""
+    completed: dict[str, dict[str, Any]] = {}
+    step_results: list[dict[str, Any]] = []
+    for index, step in enumerate(steps):
+        step_id = step.get("id", f"step-{index + 1}")
+        try:
+            fields = _resolve_workflow_refs(step["fields"], completed)
+            result = _execute_tool_on_frappe(
+                "frappe_create_document",
+                {"doctype": step["doctype"], "fields": fields},
+            )
+            step_result = {
+                "id": step_id,
+                "doctype": step["doctype"],
+                "result": result,
+            }
+            step_results.append(step_result)
+            if result.get("status") != "SUCCESS":
+                return {
+                    "status": "ERROR",
+                    "message": (
+                        f"Workflow stopped at '{step_id}' after {len(step_results) - 1} "
+                        "step(s) completed. Review the partial result before retrying."
+                    ),
+                    "failed_step": step_id,
+                    "completed_steps": completed,
+                    "steps": step_results,
+                }
+            completed[step_id] = {
+                "name": result.get("created_name"),
+                "created_name": result.get("created_name"),
+            }
+        except Exception as exc:
+            logger.error("Workflow step %s failed", step_id, exc_info=True)
+            return {
+                "status": "ERROR",
+                "message": f"Workflow stopped at '{step_id}': {exc}",
+                "failed_step": step_id,
+                "completed_steps": completed,
+                "steps": step_results,
+            }
+    return {
+        "status": "SUCCESS",
+        "message": f"Workflow completed successfully ({len(step_results)} step(s)).",
+        "completed_steps": completed,
+        "steps": step_results,
+    }
 
 
 @router.get("", response_model=list[ApprovalRequest])
@@ -150,13 +221,17 @@ def _execute_tool_on_frappe(tool_name: str, arguments: dict[str, Any]) -> dict[s
 @router.get("/{approval_id}/dry-run", response_model=ApprovalRequest)
 async def dry_run_approval(approval_id: str):
     """Execute an on-demand pre-flight validation and dry-run check for an approval request."""
-    from app.governance.payload_validator import validate_and_dry_run
+    from app.governance.payload_validator import validate_and_dry_run, validate_create_workflow
 
     req = approval_store.get(approval_id)
     if not req:
         raise HTTPException(status_code=404, detail="Approval request not found")
 
-    dry_run_result = validate_and_dry_run(req.tool_name, req.arguments)
+    dry_run_result = (
+        validate_create_workflow(req.arguments)
+        if req.tool_name == "frappe_create_workflow"
+        else validate_and_dry_run(req.tool_name, req.arguments)
+    )
     req.preflight = dry_run_result
     approval_store.save(req)
     return req
@@ -173,9 +248,13 @@ async def approve_request(approval_id: str, decision: ApprovalDecision):
         raise HTTPException(status_code=400, detail=f"Request is already in state {req.status}")
 
     if req.tool_name.startswith("frappe_") or req.tool_name.startswith("hrms_"):
-        from app.governance.payload_validator import validate_and_dry_run
+        from app.governance.payload_validator import validate_and_dry_run, validate_create_workflow
 
-        req.preflight = validate_and_dry_run(req.tool_name, req.arguments)
+        req.preflight = (
+            validate_create_workflow(req.arguments)
+            if req.tool_name == "frappe_create_workflow"
+            else validate_and_dry_run(req.tool_name, req.arguments)
+        )
         if not req.preflight.get("dry_run_passed", False):
             req.status = ApprovalStatus.FAILED
             req.result = {
@@ -198,7 +277,11 @@ async def approve_request(approval_id: str, decision: ApprovalDecision):
     req = claimed
 
     # Actually execute the mutation on Frappe via MCP
-    execution_result = _execute_tool_on_frappe(req.tool_name, req.arguments)
+    execution_result = (
+        _execute_create_workflow(req.arguments["steps"])
+        if req.tool_name == "frappe_create_workflow"
+        else _execute_tool_on_frappe(req.tool_name, req.arguments)
+    )
 
     if execution_result.get("status") == "SUCCESS":
         req.status = ApprovalStatus.EXECUTED
