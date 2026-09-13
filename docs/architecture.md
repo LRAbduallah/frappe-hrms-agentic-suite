@@ -113,6 +113,10 @@ permissions, mandatory fields, document state, or workflow rules.
 - There is no local transaction or rollback across multiple Frappe API calls.
 - Bulk operations are sequential and can leave partial results.
 - Frappe API credentials belong to the MCP server, not the browser.
+- Tool definitions are loaded selectively; tool results are loaded lazily;
+  long-term facts live in session working memory, not in every prompt.
+- The orchestrator keeps a sliding conversation window and truncates large
+  tool results so long chats do not replay full MCP catalogs.
 
 ## Typical leave request
 

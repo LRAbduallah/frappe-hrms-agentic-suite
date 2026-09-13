@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any, Callable
 
 from mcpp.client import FrappeClient
-from mcpp.config import ServerMode
+from mcpp.compact import dumps, slim_document
+from mcpp.config import MCP_MAX_LIST_ROWS, ServerMode
 from mcpp.tools.schema import (
     BulkCreateInput,
     CreateDocInput,
@@ -35,18 +35,22 @@ def register_document_tools(
     async def frappe_list_documents(params: ListDocsInput) -> str:
         """List and search documents of any DocType with filters, field selection, and pagination."""
         try:
+            limit = min(params.limit, MCP_MAX_LIST_ROWS)
             docs = await client.get_list(
                 params.doctype,
                 fields=params.fields,
                 filters=params.filters,
                 order_by=params.order_by,
-                limit=params.limit,
+                limit=limit,
                 offset=params.offset,
             )
-            return json.dumps(
-                {"count": len(docs), "offset": params.offset, "limit": params.limit, "documents": docs},
-                indent=2,
-                default=str,
+            return dumps(
+                {
+                    "count": len(docs),
+                    "offset": params.offset,
+                    "limit": limit,
+                    "documents": slim_document(docs),
+                }
             )
         except Exception as e:
             return err(e)
@@ -65,7 +69,7 @@ def register_document_tools(
         """Fetch the full content and child tables of a single document by DocType and name."""
         try:
             doc = await client.get_doc(params.doctype, params.name)
-            return json.dumps(doc, indent=2, default=str)
+            return dumps(slim_document(doc))
         except Exception as e:
             return err(e)
 
@@ -83,7 +87,7 @@ def register_document_tools(
         """Create a new document of any DocType. Returns the created record with assigned name ID."""
         try:
             doc = await client.create_doc(params.doctype, params.fields)
-            return json.dumps(doc, indent=2, default=str)
+            return dumps(slim_document(doc))
         except Exception as e:
             return err(e)
 
@@ -101,7 +105,7 @@ def register_document_tools(
         """Update fields on an existing document."""
         try:
             doc = await client.update_doc(params.doctype, params.name, params.fields)
-            return json.dumps(doc, indent=2, default=str)
+            return dumps(slim_document(doc))
         except Exception as e:
             return err(e)
 
@@ -124,9 +128,7 @@ def register_document_tools(
             """Permanently delete a document. Available only in Admin mode."""
             try:
                 await client.delete_doc(params.doctype, params.name)
-                return json.dumps(
-                    {"deleted": True, "doctype": params.doctype, "name": params.name, "mode": "admin"}
-                )
+                return dumps({"deleted": True, "doctype": params.doctype, "name": params.name, "mode": "admin"})
             except Exception as e:
                 return err(e)
 
@@ -151,7 +153,7 @@ def register_document_tools(
                 except Exception as ex:
                     errors.append({"index": i, "error": str(ex)})
 
-            return json.dumps(
+            return dumps(
                 {
                     "doctype": params.doctype,
                     "total": len(params.documents),
@@ -159,6 +161,5 @@ def register_document_tools(
                     "error_count": len(errors),
                     "created": created,
                     "errors": errors,
-                },
-                indent=2,
+                }
             )

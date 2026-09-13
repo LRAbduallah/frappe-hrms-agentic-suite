@@ -79,13 +79,22 @@ multiple current values, and stop with an actionable prerequisite message when
 no valid value exists. The live installed schema is authoritative because field
 requirements vary across Frappe HRMS versions.
 
-For broader API orientation, call `frappe_get_api_catalog`. It returns an
-OpenAPI-style JSON catalog generated from the connected Frappe instance,
-including generic REST operations, the selected DocType schema, Link targets,
-child-table relationships, Select options, and the follow-up MCP operation to
-resolve each relationship. The catalog is for navigation and planning;
-`frappe_get_creation_plan` remains mandatory immediately before a mutation
-because current records, permissions, and prerequisites can change.
+For broader API orientation, call `frappe_get_api_catalog` only when the
+DocType relationship map is unknown. Compact mode is the default and returns a
+small field/link map plus the follow-up MCP operation for each relationship.
+Do not load the catalog every turn, and do not paste it into the user-facing
+answer. `frappe_get_creation_plan` remains mandatory immediately before a
+mutation because current records, permissions, and prerequisites can change.
+
+## Context efficiency
+
+Production sessions stay small by:
+
+- discovering tools at startup, then giving each specialist a restricted subset;
+- returning compact JSON from MCP (required/link/select fields, sampled Link options);
+- caching DocType metadata for a short TTL;
+- truncating large tool results and sliding-windowing conversation history;
+- storing a few session facts in working memory instead of replaying MCP dumps.
 
 The curated workflow guidance is based on the official Frappe HR documentation
 and public HRMS DocType definitions, including:

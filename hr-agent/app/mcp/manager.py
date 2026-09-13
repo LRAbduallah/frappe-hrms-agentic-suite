@@ -67,16 +67,20 @@ class MCPManager:
         """Return tools whose names appear in `names`, skipping missing ones gracefully."""
         return [self._tools_by_name[n] for n in names if n in self._tools_by_name]
 
-    _CORE = (
+    _LOOKUP = (
         "frappe_get_document",
         "frappe_list_documents",
         "frappe_get_link_options",
-        "frappe_get_doctype_schema",
-        "frappe_get_creation_plan",
-        "frappe_get_api_catalog",
-        "hrms_list_doctypes",
         "hrms_find_employee",
         "hrms_search_employees",
+    )
+    _PLAN = (
+        "frappe_get_creation_plan",
+        "frappe_get_doctype_schema",
+        "hrms_list_doctypes",
+    )
+    _CATALOG = (
+        "frappe_get_api_catalog",
     )
 
     _WRITE = (
@@ -89,11 +93,13 @@ class MCPManager:
     )
 
     def get_tools_for_employee_agent(self) -> list[Any]:
-        return self._pick(*self._CORE)
+        return self._pick(*self._LOOKUP, *self._PLAN, *self._CATALOG)
 
     def get_tools_for_leave_agent(self) -> list[Any]:
         return self._pick(
-            *self._CORE,
+            *self._LOOKUP,
+            *self._PLAN,
+            *self._CATALOG,
             *self._WRITE,
             "hrms_get_leave_balance",
             "hrms_get_attendance",
@@ -102,24 +108,26 @@ class MCPManager:
 
     def get_tools_for_payroll_agent(self) -> list[Any]:
         return self._pick(
-            *self._CORE,
+            *self._LOOKUP,
+            *self._PLAN,
+            *self._CATALOG,
             *self._WRITE,
             "hrms_get_salary_slips",
             "hrms_verify_dataset",
         )
 
     def get_tools_for_expense_agent(self) -> list[Any]:
-        return self._pick(*self._CORE, *self._WRITE)
+        return self._pick(*self._LOOKUP, *self._PLAN, *self._CATALOG, *self._WRITE)
 
     def get_tools_for_lifecycle_agent(self) -> list[Any]:
-        return self._pick(*self._CORE, *self._WRITE)
+        return self._pick(*self._LOOKUP, *self._PLAN, *self._CATALOG, *self._WRITE)
 
     def get_tools_for_recruitment_agent(self) -> list[Any]:
-        return self._pick(*self._CORE, *self._WRITE)
+        return self._pick(*self._LOOKUP, *self._PLAN, *self._CATALOG, *self._WRITE)
 
     def get_tools_for_reporting_agent(self) -> list[Any]:
         return self._pick(
-            *self._CORE,
+            *self._LOOKUP,
             "hrms_verify_dataset",
             "hrms_get_salary_slips",
             "hrms_get_attendance",

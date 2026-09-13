@@ -1,5 +1,6 @@
 import logging
 from strands import Agent
+from app.agents.context import conversation_manager
 from app.hooks.governance import HRAgentGovernanceHook
 from app.mcp.manager import mcp_manager
 from app.models.llm import get_model
@@ -36,8 +37,10 @@ def create_employee_agent() -> Agent:
             "You may CREATE or UPDATE Employee master records when explicitly requested — always propose mutations via the governance hook.\n"
             "Never invent employee data. If search returns multiple matches, present them clearly to disambiguate.\n"
             "Before creating/updating, call frappe_get_creation_plan and use only its live field names and Link options. "
-            "Ask the user to choose when multiple companies, departments, or other linked records exist."
+            "Ask the user to choose when multiple companies, departments, or other linked records exist. "
+            "Call frappe_get_api_catalog only if the relationship map is unknown. Keep tool results out of the user answer."
         ),
+        conversation_manager=conversation_manager(specialist=True),
         hooks=[HRAgentGovernanceHook()],
     )
 
@@ -73,8 +76,10 @@ def create_leave_attendance_agent() -> Agent:
             "- Critically low leave is defined as <= 2.0 days remaining.\n"
             "Always retrieve authoritative facts from Frappe before making recommendations.\n"
             "Before creating, call frappe_get_creation_plan to resolve required fields, prerequisites, and real Link options. "
-            "Never choose the first Company, Employee, Leave Type, or other linked record silently."
+            "Never choose the first Company, Employee, Leave Type, or other linked record silently. "
+            "Prefer filtered lookups over dumping option lists."
         ),
+        conversation_manager=conversation_manager(specialist=True),
         hooks=[HRAgentGovernanceHook()],
     )
 
@@ -108,8 +113,10 @@ def create_payroll_agent() -> Agent:
             "  inform the user clearly of what prerequisites are missing rather than retrying blindly.\n"
             "- When asked to 'run payroll' for a period, clarify the company, payroll frequency, and date range first.\n"
             "- Use frappe_get_creation_plan to discover required fields, prerequisites, child tables, and real Link values before building payloads.\n"
-            "- Present salary figures with currency context. Never expose raw employee financial data without confirming authorization."
+            "- Present salary figures with currency context. Never expose raw employee financial data without confirming authorization. "
+            "Keep MCP results compact and out of the user-facing answer."
         ),
+        conversation_manager=conversation_manager(specialist=True),
         hooks=[HRAgentGovernanceHook()],
     )
 
@@ -139,6 +146,7 @@ def create_expense_agent() -> Agent:
             "  and individual expense line items before drafting.\n"
             "- Use frappe_get_creation_plan and frappe_get_link_options to validate every Expense Claim link and ask the user to choose among multiple valid records."
         ),
+        conversation_manager=conversation_manager(specialist=True),
         hooks=[HRAgentGovernanceHook()],
     )
 
@@ -170,6 +178,7 @@ def create_lifecycle_agent() -> Agent:
             "Use frappe_get_creation_plan to discover required fields, prerequisites, and valid links for each lifecycle document type. "
             "Ask the user to choose among multiple employees, companies, departments, or other links."
         ),
+        conversation_manager=conversation_manager(specialist=True),
         hooks=[HRAgentGovernanceHook()],
     )
 
@@ -200,6 +209,7 @@ def create_recruitment_agent() -> Agent:
             "- When generating a Job Offer, confirm designation, salary, start date, and offer expiry.\n"
             "- Use frappe_get_creation_plan before every recruitment write and never invent Job Opening, Company, Applicant, or other Link values."
         ),
+        conversation_manager=conversation_manager(specialist=True),
         hooks=[HRAgentGovernanceHook()],
     )
 
@@ -224,8 +234,10 @@ def create_reporting_agent() -> Agent:
             "- Leave utilization, attendance patterns, absenteeism anomalies.\n"
             "- Payroll summaries, salary distribution, advance/loan exposure.\n"
             "- Recruitment funnel, time-to-fill, offer acceptance rates.\n"
-            "Present findings as markdown tables and bullet summaries with actionable recommendations."
+            "Present findings as markdown tables and bullet summaries with actionable recommendations. "
+            "Do not load API catalogs or full schemas for reporting queries."
         ),
+        conversation_manager=conversation_manager(specialist=True),
         hooks=[HRAgentGovernanceHook()],
     )
 
@@ -249,5 +261,6 @@ def create_communication_agent() -> Agent:
             "- For onboarding/offboarding, use a warm and supportive tone.\n"
             "- Always propose emails via 'propose_send_email' so the HR manager can review and approve them before sending."
         ),
+        conversation_manager=conversation_manager(specialist=True),
         hooks=[HRAgentGovernanceHook()],
     )

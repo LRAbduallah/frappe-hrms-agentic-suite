@@ -37,12 +37,11 @@ def build_server(mode: Optional[ServerMode] = None) -> MCPServer:
 
     instructions = (
         f"You are connected to a Frappe HRMS instance operating in '{active_mode.upper()}' mode.\n\n"
-        "1. API and Schema Discovery: Use 'frappe_get_api_catalog' when you need the live "
-        "OpenAPI-style REST shape and linked DocType relationships. Before creating or modifying documents, call 'hrms_list_doctypes' "
-        "when the exact DocType is uncertain, then call 'frappe_get_creation_plan'. It returns "
-        "the live installed schema, required fields, child tables, workflow rules, prerequisites, "
-        "and current valid Link values. Use 'frappe_get_doctype_schema' for detail and "
-        "'frappe_get_link_options' for a targeted lookup.\n"
+        "1. Lazy discovery: call tools only for the current DocType. Prefer compact results. "
+        "Use 'frappe_get_api_catalog' only when the relationship map is unknown; do not load it every turn. "
+        "When the DocType is uncertain, call 'hrms_list_doctypes'. Immediately before a write, call "
+        "'frappe_get_creation_plan'. Use 'frappe_get_link_options' with a search filter to resolve values. "
+        "Do not paste catalogs, schemas, or large option lists into the user-facing answer.\n"
         "2. Link Selection: Never invent or silently choose Company, Employee, Department, "
         "Designation, Leave Type, Currency, Cost Center, or any other Link value. Use only "
         "records returned by Frappe. If multiple options exist, ask the user to choose; if none "

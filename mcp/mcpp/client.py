@@ -15,11 +15,12 @@ from mcpp.config import (
     FRAPPE_API_SECRET,
     FRAPPE_BASE_URL,
     FRAPPE_REQUEST_TIMEOUT,
+    FRAPPE_SCHEMA_CACHE_TTL,
 )
 
 
 logger = logging.getLogger(__name__)
-_LOG_VALUE_LIMIT = 4_000
+_LOG_VALUE_LIMIT = 1_500
 _SENSITIVE_LOG_KEYS = {"authorization", "api_key", "api_secret", "password", "secret", "token"}
 
 
@@ -105,6 +106,8 @@ class FrappeClient:
         self.api_key = api_key or FRAPPE_API_KEY
         self.api_secret = api_secret or FRAPPE_API_SECRET
         self.timeout = timeout or FRAPPE_REQUEST_TIMEOUT
+        self._meta_cache: dict[str, tuple[float, dict]] = {}
+        self._meta_ttl = FRAPPE_SCHEMA_CACHE_TTL
 
     def _auth_header(self) -> dict[str, str]:
         if not self.api_key or not self.api_secret:
@@ -225,6 +228,12 @@ class FrappeClient:
 
     async def get_doctype_meta(self, doctype: str) -> dict:
         """Fetch DocType metadata: fields, child tables, options, permissions."""
+        cached = self._meta_cache.get(doctype)
+        now = time.time()
+        if cached and now - cached[0] < self._meta_ttl:
+            return cached[1]
+
+        meta: dict = {}
         # frappe.desk.form.load.getdoctype is whitelisted and universally accessible
         try:
             result = await self.call_method(
@@ -232,16 +241,20 @@ class FrappeClient:
                 params={"doctype": doctype},
             )
             if isinstance(result, dict) and result.get("docs"):
-                return result["docs"][0]
+                meta = result["docs"][0]
         except Exception:
-            pass
+            meta = {}
 
-        # Fallback to get_doc if available
-        result = await self.request(
-            "GET",
-            f"/api/resource/DocType/{_url_quote(doctype)}",
-        )
-        return result.get("data", {}) if isinstance(result, dict) else {}
+        if not meta:
+            result = await self.request(
+                "GET",
+                f"/api/resource/DocType/{_url_quote(doctype)}",
+            )
+            meta = result.get("data", {}) if isinstance(result, dict) else {}
+
+        if meta:
+            self._meta_cache[doctype] = (now, meta)
+        return meta
 
     async def get_count(self, doctype: str, filters: list | dict | None = None) -> int:
         params: dict[str, Any] = {"doctype": doctype}

@@ -11,6 +11,14 @@ from strands.hooks import (
 )
 
 logger = logging.getLogger("hr_agent.audit")
+_LOG_CLIP = 400
+
+
+def _clip(value: Any, limit: int = _LOG_CLIP) -> str:
+    text = str(value)
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit]}... [truncated {len(text) - limit} chars]"
 
 # Tools requiring human approval before mutation
 MUTATION_TOOLS = {
@@ -62,7 +70,7 @@ class HRAgentGovernanceHook(HookProvider):
             "[AUDIT:TOOL:BEFORE] tool=%s tool_use_id=%s args=%s",
             tool_name,
             tool_use.get("toolUseId", ""),
-            tool_args,
+            _clip(tool_args),
         )
 
         # Enforce disabled tools
@@ -91,6 +99,6 @@ class HRAgentGovernanceHook(HookProvider):
             "[AUDIT:TOOL:AFTER] tool=%s tool_use_id=%s args=%s result=%s",
             tool_name,
             tool_use.get("toolUseId", ""),
-            tool_args,
-            result,
+            _clip(tool_args),
+            _clip(result, 800),
         )

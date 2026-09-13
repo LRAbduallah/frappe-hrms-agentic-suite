@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from typing import Callable, Optional
 
 from mcpp.client import FrappeClient
+from mcpp.compact import IGNORED_FIELD_TYPES, dumps, json_type, select_options
 from mcpp.doctypes import HR_DOCTYPES, format_registry_markdown, get_creation_guidance
 from mcpp.tools.schema import (
     ApiCatalogInput,
@@ -14,6 +14,50 @@ from mcpp.tools.schema import (
     ListDoctypesInput,
     SchemaInput,
 )
+
+_OPERATIONS = {
+    "list": "frappe_list_documents",
+    "get": "frappe_get_document",
+    "create": "frappe_create_document",
+    "update": "frappe_update_document",
+    "lookup": "frappe_get_link_options",
+    "schema": "frappe_get_doctype_schema",
+    "plan": "frappe_get_creation_plan",
+}
+
+
+def _summarize_field(field: dict, *, compact: bool) -> dict | None:
+    fieldname = field.get("fieldname")
+    fieldtype = field.get("fieldtype")
+    if not fieldname or fieldtype in IGNORED_FIELD_TYPES:
+        return None
+    required = bool(field.get("reqd"))
+    if compact and not required and fieldtype not in {"Link", "Table", "Select"}:
+        return None
+    item = {
+        "fieldname": fieldname,
+        "label": field.get("label"),
+        "type": json_type(fieldtype),
+        "fieldtype": fieldtype,
+        "required": required,
+    }
+    if not compact:
+        item.update(
+            {
+                "default": field.get("default"),
+                "description": field.get("description") or None,
+                "read_only": bool(field.get("read_only")),
+                "hidden": bool(field.get("hidden")),
+                "depends_on": field.get("depends_on") or None,
+                "mandatory_depends_on": field.get("mandatory_depends_on") or None,
+            }
+        )
+    if fieldtype in {"Link", "Table"} and field.get("options"):
+        item["target"] = field["options"]
+        item["lookup"] = "frappe_get_link_options" if fieldtype == "Link" else "frappe_get_doctype_schema"
+    if fieldtype == "Select":
+        item["enum"] = select_options(field.get("options"))
+    return item
 
 
 def register_discovery_tools(mcp, client: FrappeClient, err: Callable[[Exception], str]) -> None:
@@ -30,132 +74,73 @@ def register_discovery_tools(mcp, client: FrappeClient, err: Callable[[Exception
         },
     )
     async def frappe_get_api_catalog(params: Optional[ApiCatalogInput] = None) -> str:
-        """Return an OpenAPI-style catalog generated from the installed Frappe instance.
+        """Return a compact live API map for a DocType.
 
-        The catalog documents generic REST operations and, when a DocType is supplied,
-        its live fields, Link targets, child tables, and linked lookup operations.
-        Use this to understand the available API shape; use frappe_get_creation_plan
-        immediately before a write for current values and prerequisites.
+        Default compact mode is a relationship catalog, not a full OpenAPI dump.
+        Use frappe_get_link_options to resolve values and frappe_get_creation_plan
+        immediately before a write.
         """
         request = params or ApiCatalogInput()
-        catalog: dict = {
+        catalog = {
             "openapi": "3.1.0",
-            "info": {
-                "title": "Live Frappe REST API",
-                "description": (
-                    "Generated from the connected Frappe instance. "
-                    "Permissions and installed customizations remain authoritative."
-                ),
-            },
-            "servers": [{"url": f"{client.base_url}/api"}],
-            "paths": {
-                "/resource/{doctype}": {
-                    "get": {
-                        "operationId": "frappe_list_documents",
-                        "parameters": [
-                            {"name": "doctype", "in": "path", "required": True, "schema": {"type": "string"}},
-                            {"name": "fields", "in": "query", "schema": {"type": "array", "items": {"type": "string"}}},
-                            {"name": "filters", "in": "query", "schema": {"type": "array"}},
-                            {"name": "limit_page_length", "in": "query", "schema": {"type": "integer"}},
-                        ],
-                    },
-                    "post": {
-                        "operationId": "frappe_create_document",
-                        "parameters": [
-                            {"name": "doctype", "in": "path", "required": True, "schema": {"type": "string"}},
-                        ],
-                        "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
-                    },
-                },
-                "/resource/{doctype}/{name}": {
-                    "get": {"operationId": "frappe_get_document"},
-                    "put": {
-                        "operationId": "frappe_update_document",
-                        "requestBody": {"required": True, "content": {"application/json": {"schema": {"type": "object"}}}},
-                    },
-                },
-            },
-            "x-agent-instructions": [
-                "Use exact field names from the live schema; never infer or rename fields.",
-                "For Link fields, call the linked lookup operation or frappe_get_link_options.",
+            "info": {"title": "Live Frappe REST API", "version": "compact" if request.compact else "full"},
+            "operations": _OPERATIONS,
+            "policy": [
+                "Use exact live field names.",
+                "Resolve Link values with frappe_get_link_options and a search filter when possible.",
                 "Call frappe_get_creation_plan before proposing a create or update.",
-                "A successful create does not imply submission; follow the DocType workflow.",
+                "Never paste this catalog into the user-facing answer.",
             ],
         }
-
         if not request.doctype:
-            return json.dumps(catalog, indent=2, default=str)
+            return dumps(catalog)
 
         try:
-            related: dict[str, dict] = {}
-            queue = [request.doctype]
-            while queue and len(related) <= request.max_link_schemas:
-                current = queue.pop(0)
-                if current in related:
-                    continue
-                meta = await client.get_doctype_meta(current)
-                if not meta:
-                    continue
-                fields = []
-                for field in meta.get("fields", []):
-                    fieldname = field.get("fieldname")
-                    fieldtype = field.get("fieldtype")
-                    if not fieldname or fieldtype in {"Section Break", "Column Break", "Tab Break", "HTML", "Button", "Heading", "Fold"}:
-                        continue
-                    json_type = {
-                        "Check": "boolean",
-                        "Int": "integer",
-                        "Float": "number",
-                        "Currency": "number",
-                        "Percent": "number",
-                        "Date": "string",
-                        "Datetime": "string",
-                        "Time": "string",
-                    }.get(fieldtype, "string")
-                    item = {
-                        "type": json_type,
-                        "fieldname": fieldname,
-                        "label": field.get("label"),
-                        "x-frappe-fieldtype": fieldtype,
-                        "required": bool(field.get("reqd")),
-                        "read_only": bool(field.get("read_only")),
-                        "default": field.get("default"),
-                        "description": field.get("description") or None,
-                    }
-                    if fieldtype in {"Link", "Table"} and field.get("options"):
-                        target = field["options"]
-                        item["target_doctype"] = target
-                        item["lookup_operation"] = "frappe_get_link_options" if fieldtype == "Link" else "frappe_get_doctype_schema"
-                        if fieldtype == "Table":
-                            item["type"] = "array"
-                            item["items"] = {"$ref": f"#/components/schemas/{target}"}
-                        if request.include_link_schemas and target not in related and len(related) + len(queue) < request.max_link_schemas:
-                            queue.append(target)
-                    if fieldtype == "Select":
-                        item["enum"] = [option for option in (field.get("options") or "").split("\n") if option]
-                    fields.append(item)
-                related[current] = {
-                    "type": "object",
-                    "description": f"Live schema for Frappe DocType '{current}'.",
-                    "properties": {field["fieldname"]: field for field in fields},
-                    "required": [field["fieldname"] for field in fields if field["required"]],
-                }
+            meta = await client.get_doctype_meta(request.doctype)
+            if not meta:
+                return dumps({"status": "ERROR", "message": f"DocType '{request.doctype}' was not found in Frappe."})
 
-            catalog["x-doctype"] = request.doctype
-            catalog["components"] = {"schemas": related}
-            catalog["paths"]["/method/frappe.desk.form.load.getdoctype"] = {
-                "get": {
-                    "operationId": "frappe_get_doctype_schema",
-                    "description": "Resolve a live DocType schema and field metadata."
+            fields = []
+            optional_fieldnames = []
+            for field in meta.get("fields", []):
+                summarized = _summarize_field(field, compact=request.compact)
+                if summarized:
+                    fields.append(summarized)
+                elif field.get("fieldname") and field.get("fieldtype") not in IGNORED_FIELD_TYPES:
+                    optional_fieldnames.append(field["fieldname"])
+
+            catalog.update(
+                {
+                    "doctype": request.doctype,
+                    "is_submittable": bool(meta.get("is_submittable")),
+                    "required": [field["fieldname"] for field in fields if field["required"]],
+                    "fields": {field["fieldname"]: field for field in fields},
+                    "child_tables": [
+                        {"fieldname": field["fieldname"], "target": field.get("target")}
+                        for field in fields
+                        if field.get("fieldtype") == "Table"
+                    ],
+                    "next": ["frappe_get_link_options", "frappe_get_creation_plan"],
                 }
-            }
-            catalog["paths"]["/resource/{target_doctype}"] = {
-                "get": {
-                    "operationId": "frappe_get_link_options",
-                    "description": "List current records for a Link field target; filter by name when needed."
-                }
-            }
-            return json.dumps(catalog, indent=2, default=str)
+            )
+            if request.compact:
+                catalog["optional_fieldnames"] = optional_fieldnames
+            elif request.include_link_schemas:
+                related = {}
+                for field in fields:
+                    target = field.get("target")
+                    if not target or target in related or len(related) >= request.max_link_schemas:
+                        continue
+                    related_meta = await client.get_doctype_meta(target)
+                    related[target] = [
+                        item["fieldname"]
+                        for item in (
+                            _summarize_field(raw, compact=True) for raw in related_meta.get("fields", [])
+                        )
+                        if item
+                    ]
+                catalog["related"] = related
+            return dumps(catalog)
         except Exception as e:
             return err(e)
 
@@ -170,13 +155,20 @@ def register_discovery_tools(mcp, client: FrappeClient, err: Callable[[Exception
         },
     )
     async def hrms_list_doctypes(params: Optional[ListDoctypesInput] = None) -> str:
-        """List all HRMS DocTypes supported by this server, categorized by domain.
+        """List HRMS DocTypes. Compact mode returns grouped names only."""
+        request = params or ListDoctypesInput()
+        if not request.compact:
+            return format_registry_markdown(request.category)
 
-        Always call this tool first if you are not 100% sure of the exact Frappe
-        DocType name (e.g. 'Shift Assignment' vs 'Shift Request', or 'Leave Allocation').
-        """
-        cat = params.category if params else None
-        return format_registry_markdown(cat)
+        grouped: dict[str, list[str]] = {}
+        for name, meta in sorted(HR_DOCTYPES.items()):
+            category = meta["category"]
+            if request.category and request.category.lower() not in category.lower():
+                continue
+            grouped.setdefault(category, []).append(name)
+        if not grouped:
+            return dumps({"error": f"No HR DocTypes found matching category '{request.category}'."})
+        return dumps({"doctypes": grouped})
 
     @mcp.tool(
         name="frappe_get_doctype_schema",
@@ -189,58 +181,29 @@ def register_discovery_tools(mcp, client: FrappeClient, err: Callable[[Exception
         },
     )
     async def frappe_get_doctype_schema(params: SchemaInput) -> str:
-        """Inspect the schema of any DocType: fieldnames, labels, fieldtypes,
-        required status, and link options.
-
-        Call this before creating or updating a document to ensure correct field names
-        and mandatory fields instead of guessing.
-        """
+        """Inspect live DocType fields. Compact mode returns write-relevant fields only."""
         try:
             meta = await client.get_doctype_meta(params.doctype)
-            fields = meta.get("fields", [])
-            ignored_types = {
-                "Section Break",
-                "Column Break",
-                "Tab Break",
-                "HTML",
-                "Button",
-                "Heading",
-                "Fold",
+            fields = []
+            optional_fieldnames = []
+            for field in meta.get("fields", []):
+                summarized = _summarize_field(field, compact=params.compact)
+                if summarized:
+                    fields.append(summarized)
+                elif field.get("fieldname") and field.get("fieldtype") not in IGNORED_FIELD_TYPES:
+                    optional_fieldnames.append(field["fieldname"])
+            payload = {
+                "doctype": params.doctype,
+                "is_submittable": bool(meta.get("is_submittable")),
+                "title_field": meta.get("title_field"),
+                "fields_count": len(fields),
+                "fields": fields,
             }
-            simplified = [
-                {
-                    "fieldname": f.get("fieldname"),
-                    "label": f.get("label"),
-                    "fieldtype": f.get("fieldtype"),
-                    "required": bool(f.get("reqd")),
-                    "options": f.get("options") or None,
-                    "default": f.get("default"),
-                    "description": f.get("description") or None,
-                    "read_only": bool(f.get("read_only")),
-                    "hidden": bool(f.get("hidden")),
-                    "depends_on": f.get("depends_on") or None,
-                    "mandatory_depends_on": f.get("mandatory_depends_on") or None,
-                }
-                for f in fields
-                if f.get("fieldtype") not in ignored_types and f.get("fieldname")
-            ]
-
-            note = ""
+            if params.compact:
+                payload["optional_fieldnames"] = optional_fieldnames
             if params.doctype not in HR_DOCTYPES:
-                note = f"Note: '{params.doctype}' is not in the curated HR registry. Verify exact spelling."
-
-            return json.dumps(
-                {
-                    "doctype": params.doctype,
-                    "is_submittable": bool(meta.get("is_submittable")),
-                    "title_field": meta.get("title_field"),
-                    "fields_count": len(simplified),
-                    "fields": simplified,
-                    "note": note or None,
-                },
-                indent=2,
-                default=str,
-            )
+                payload["note"] = f"'{params.doctype}' is not in the curated HR registry. Verify exact spelling."
+            return dumps(payload)
         except Exception as e:
             return err(e)
 
@@ -255,89 +218,71 @@ def register_discovery_tools(mcp, client: FrappeClient, err: Callable[[Exception
         },
     )
     async def frappe_get_creation_plan(params: CreationPlanInput) -> str:
-        """Build a live, schema-aware creation plan before writing a Frappe document.
-
-        Returns required fields, field types, child-table structure, workflow state,
-        curated prerequisites, and current valid records for Link fields. The agent
-        must use the returned values rather than inventing company, employee,
-        department, or other linked record names. If multiple link options are
-        returned, ask the user to choose unless they explicitly supplied a value.
-        """
+        """Build a live creation plan. Compact mode samples Link options instead of dumping them."""
         try:
             meta = await client.get_doctype_meta(params.doctype)
             if not meta:
-                return json.dumps({
-                    "status": "ERROR",
-                    "message": f"DocType '{params.doctype}' was not found in Frappe.",
-                }, indent=2)
+                return dumps({"status": "ERROR", "message": f"DocType '{params.doctype}' was not found in Frappe."})
 
             guidance = get_creation_guidance(params.doctype)
-            ignored_types = {"Section Break", "Column Break", "Tab Break", "HTML", "Button", "Heading", "Fold"}
             fields = []
+            optional_fieldnames = []
             link_options = {}
             lookup_errors = []
 
             for field in meta.get("fields", []):
+                summarized = _summarize_field(field, compact=params.compact)
+                if summarized:
+                    fields.append(summarized)
+                elif field.get("fieldname") and field.get("fieldtype") not in IGNORED_FIELD_TYPES:
+                    optional_fieldnames.append(field["fieldname"])
+
                 fieldname = field.get("fieldname")
                 fieldtype = field.get("fieldtype")
-                if not fieldname or fieldtype in ignored_types:
+                should_lookup = fieldtype == "Link" and field.get("options") and (
+                    params.include_optional_links or bool(field.get("reqd"))
+                )
+                if not should_lookup:
                     continue
-                item = {
-                    "fieldname": fieldname,
-                    "label": field.get("label"),
-                    "fieldtype": fieldtype,
-                    "required": bool(field.get("reqd")),
-                    "options": field.get("options") or None,
-                    "default": field.get("default"),
-                    "description": field.get("description") or None,
-                    "read_only": bool(field.get("read_only")),
-                    "hidden": bool(field.get("hidden")),
-                    "depends_on": field.get("depends_on") or None,
-                    "mandatory_depends_on": field.get("mandatory_depends_on") or None,
-                }
-                if fieldtype == "Link":
-                    item["link_target"] = field.get("options")
-                    should_lookup = params.include_optional_links or bool(field.get("reqd"))
-                    if should_lookup and field.get("options"):
-                        try:
-                            values = await client.get_list(
-                                field["options"],
-                                fields=["name"],
-                                limit=params.link_option_limit,
-                                order_by="name asc",
-                            )
-                            options = [row["name"] for row in values if row.get("name")]
-                            link_options[fieldname] = {
-                                "target_doctype": field["options"],
-                                "options": options,
-                                "count_returned": len(options),
-                                "choice_required": len(options) > 1,
-                                "blocked": len(options) == 0,
-                                "required": bool(field.get("reqd")),
-                            }
-                        except Exception as exc:
-                            lookup_errors.append({
-                                "fieldname": fieldname,
-                                "target_doctype": field["options"],
-                                "required": bool(field.get("reqd")),
-                                "error": str(exc),
-                            })
-                fields.append(item)
+                try:
+                    values = await client.get_list(
+                        field["options"],
+                        fields=["name"],
+                        limit=params.link_option_limit,
+                        order_by="name asc",
+                    )
+                    options = [row["name"] for row in values if row.get("name")]
+                    link_options[fieldname] = {
+                        "target": field["options"],
+                        "options": options,
+                        "count_returned": len(options),
+                        "choice_required": len(options) > 1,
+                        "blocked": len(options) == 0,
+                        "required": bool(field.get("reqd")),
+                        "lookup": "frappe_get_link_options",
+                    }
+                except Exception as exc:
+                    lookup_errors.append(
+                        {
+                            "fieldname": fieldname,
+                            "target": field["options"],
+                            "required": bool(field.get("reqd")),
+                            "error": str(exc),
+                        }
+                    )
 
-            required_fields = [field["fieldname"] for field in fields if field["required"]]
-            child_tables = [
-                {"fieldname": field["fieldname"], "options": field["options"]}
-                for field in fields
-                if field["fieldtype"] == "Table"
-            ]
-            return json.dumps({
+            payload = {
                 "status": "READY",
                 "doctype": params.doctype,
                 "is_submittable": bool(meta.get("is_submittable")),
                 "title_field": meta.get("title_field"),
-                "required_fields": required_fields,
+                "required_fields": [field["fieldname"] for field in fields if field["required"]],
                 "fields": fields,
-                "child_tables": child_tables,
+                "child_tables": [
+                    {"fieldname": field["fieldname"], "target": field.get("target")}
+                    for field in fields
+                    if field.get("fieldtype") == "Table"
+                ],
                 "link_options": link_options,
                 "prerequisites": guidance["prerequisites"],
                 "workflow_guidance": {
@@ -346,15 +291,18 @@ def register_discovery_tools(mcp, client: FrappeClient, err: Callable[[Exception
                     "after_create": guidance["after_create"],
                 },
                 "selection_policy": (
-                    "Use only returned existing Link options. Ask the user to choose when "
-                    "count_returned is greater than one; never select the first option silently."
+                    "Use only returned existing Link options. Ask the user when choice_required is true. "
+                    "Call frappe_get_link_options with search to resolve more values."
                 ),
                 "lookup_errors": lookup_errors,
                 "can_create": (
                     not any(error["required"] for error in lookup_errors)
                     and not any(item["required"] and item["blocked"] for item in link_options.values())
                 ),
-            }, indent=2, default=str)
+            }
+            if params.compact:
+                payload["optional_fieldnames"] = optional_fieldnames
+            return dumps(payload)
         except Exception as e:
             return err(e)
 
@@ -369,26 +317,24 @@ def register_discovery_tools(mcp, client: FrappeClient, err: Callable[[Exception
         },
     )
     async def frappe_get_link_options(params: LinkOptionsInput) -> str:
-        """Fetch real, existing primary keys/names for a Link-type field.
-
-        For example, before creating an Employee, check valid 'Department' or 'Designation'
-        records so you don't enter non-existent values.
-        """
+        """Fetch existing names for a Link target. Always prefer a search filter."""
         try:
-            filters = None
-            if params.search:
-                filters = [["name", "like", f"%{params.search}%"]]
-
+            filters = [["name", "like", f"%{params.search}%"]] if params.search else None
             docs = await client.get_list(
                 params.target_doctype,
                 fields=["name"],
                 filters=filters,
                 limit=params.limit,
             )
-            options = [d["name"] for d in docs if "name" in d]
-            return json.dumps(
-                {"target_doctype": params.target_doctype, "count": len(options), "options": options},
-                indent=2,
+            options = [doc["name"] for doc in docs if doc.get("name")]
+            return dumps(
+                {
+                    "target_doctype": params.target_doctype,
+                    "count": len(options),
+                    "options": options,
+                    "search": params.search,
+                    "hint": "If multiple options exist, ask the user. Do not pick the first silently.",
+                }
             )
         except Exception as e:
             return err(e)

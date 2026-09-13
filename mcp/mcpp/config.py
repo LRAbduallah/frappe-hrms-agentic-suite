@@ -24,6 +24,9 @@ FRAPPE_BASE_URL: str = os.environ.get("FRAPPE_BASE_URL", "http://localhost:8000"
 FRAPPE_API_KEY: str = os.environ.get("FRAPPE_API_KEY", "")
 FRAPPE_API_SECRET: str = os.environ.get("FRAPPE_API_SECRET", "")
 FRAPPE_REQUEST_TIMEOUT: float = float(os.environ.get("FRAPPE_REQUEST_TIMEOUT", "30.0"))
+FRAPPE_SCHEMA_CACHE_TTL: float = float(os.environ.get("FRAPPE_SCHEMA_CACHE_TTL", "300"))
+MCP_MAX_TOOL_RESULT_CHARS: int = int(os.environ.get("MCP_MAX_TOOL_RESULT_CHARS", "12000"))
+MCP_MAX_LIST_ROWS: int = int(os.environ.get("MCP_MAX_LIST_ROWS", "25"))
 
 # Server Mode: "production" (safe, no delete) or "admin" (full CRUD + bulk setup)
 ServerMode = Literal["production", "admin"]

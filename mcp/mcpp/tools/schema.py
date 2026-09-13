@@ -13,11 +13,19 @@ class ListDoctypesInput(BaseModel):
 		default=None,
 		description="Optional category filter (e.g. 'Core HR', 'Attendance', 'Leave', 'Payroll', 'Recruitment')",
 	)
+	compact: bool = Field(
+		default=True,
+		description="Return grouped DocType names only. Set false for descriptions.",
+	)
 
 
 class SchemaInput(BaseModel):
 	model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 	doctype: str = Field(..., description="Exact Frappe DocType name, e.g. 'Employee', 'Leave Application'")
+	compact: bool = Field(
+		default=True,
+		description="Return required, Link, Select, and child-table fields only.",
+	)
 
 
 class ApiCatalogInput(BaseModel):
@@ -26,15 +34,19 @@ class ApiCatalogInput(BaseModel):
 		default=None,
 		description="Optional exact DocType. If omitted, return the generic Frappe REST catalog.",
 	)
-	include_link_schemas: bool = Field(
+	compact: bool = Field(
 		default=True,
-		description="Include one-level schemas for Link targets and child-table DocTypes.",
+		description="Return a relationship map instead of a full nested OpenAPI dump.",
+	)
+	include_link_schemas: bool = Field(
+		default=False,
+		description="Include one-level schemas for Link targets and child-table DocTypes. Ignored when compact=true.",
 	)
 	max_link_schemas: int = Field(
-		default=12,
+		default=6,
 		ge=0,
 		le=30,
-		description="Maximum related Link or child DocType schemas to include.",
+		description="Maximum related Link or child DocType schemas to include when compact=false.",
 	)
 
 
@@ -45,15 +57,19 @@ class CreationPlanInput(BaseModel):
 		min_length=1,
 		description="Exact Frappe DocType name to prepare for creation.",
 	)
+	compact: bool = Field(
+		default=True,
+		description="Return required/link/table fields and a short option sample, not the full schema dump.",
+	)
 	link_option_limit: int = Field(
-		default=20,
+		default=8,
 		ge=1,
-		le=100,
-		description="Maximum real existing options returned for each Link field.",
+		le=40,
+		description="Maximum real existing options returned for each resolved Link field.",
 	)
 	include_optional_links: bool = Field(
-		default=True,
-		description="Also resolve optional Link fields so the agent can ask for valid choices instead of guessing.",
+		default=False,
+		description="Also resolve optional Link fields. Keep false unless the user supplied optional links.",
 	)
 
 
@@ -64,7 +80,7 @@ class LinkOptionsInput(BaseModel):
 		description="The DocType a Link field points to (e.g. 'Department', 'Leave Type', 'Company', 'Branch')",
 	)
 	search: Optional[str] = Field(default=None, description="Optional substring to filter valid values")
-	limit: int = Field(default=25, ge=1, le=100, description="Max options to return")
+	limit: int = Field(default=12, ge=1, le=40, description="Max options to return")
 
 
 class ListDocsInput(BaseModel):
@@ -79,7 +95,7 @@ class ListDocsInput(BaseModel):
 		description='Filters e.g. [["status", "=", "Open"], ["employee", "=", "HR-EMP-00001"]]',
 	)
 	order_by: Optional[str] = Field(default=None, description="Sort order, e.g. 'creation desc'")
-	limit: int = Field(default=20, ge=1, le=200, description="Max rows to return")
+	limit: int = Field(default=20, ge=1, le=50, description="Max rows to return")
 	offset: int = Field(default=0, ge=0, description="Pagination offset")
 
 
