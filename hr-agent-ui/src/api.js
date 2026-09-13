@@ -82,7 +82,7 @@ export const api = {
   },
 
   // Streaming chat handler compliant with standard OpenAI SSE specification
-  async sendChat({ messages, stream = true, sessionId = null }, onChunk, onDone, onError) {
+  async sendChat({ messages, stream = true, sessionId = null }, onChunk, onDone, onError, onStatus) {
     try {
       const res = await fetch(`${getBaseUrl()}/v1/chat/completions`, requestOptions({
         method: 'POST',
@@ -114,13 +114,15 @@ export const api = {
       const reader = res.body.getReader()
       const decoder = new TextDecoder('utf-8')
       let accumulated = ''
+      let pending = ''
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
 
-        const chunkText = decoder.decode(value, { stream: true })
-        const lines = chunkText.split('\n')
+        pending += decoder.decode(value, { stream: true })
+        const lines = pending.split('\n')
+        pending = lines.pop() || ''
 
         for (const line of lines) {
           const trimmed = line.trim()
@@ -134,6 +136,8 @@ export const api = {
 
           try {
             const parsed = JSON.parse(payload)
+            const status = parsed.agent_status?.message
+            if (status && onStatus) onStatus(status)
             const token = parsed.choices?.[0]?.delta?.content || ''
             if (token) {
               accumulated += token

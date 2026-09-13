@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
@@ -514,16 +514,34 @@ export function ChatInterface({
   handleInputChange,
   handleSubmit,
   isLoading,
+  agentStatus,
   stop,
   onResetChat,
   onSelectPrompt,
 }) {
   const [copiedIndex, setCopiedIndex] = React.useState(null)
   const messagesEndRef = useRef(null)
+  const loadingStartedAt = useRef(null)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
+
+  useEffect(() => {
+    if (!isLoading) {
+      loadingStartedAt.current = null
+      setElapsedSeconds(0)
+      return undefined
+    }
+
+    loadingStartedAt.current = Date.now()
+    const timer = window.setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - loadingStartedAt.current) / 1000))
+    }, 250)
+
+    return () => window.clearInterval(timer)
+  }, [isLoading])
 
   const handleCopy = (text, index) => {
     navigator.clipboard.writeText(text)
@@ -777,26 +795,11 @@ export function ChatInterface({
           )}
 
           {isLoading && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                fontSize: '12px',
-                color: 'var(--text-muted)',
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
-              <div
-                style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: '#0070f3',
-                }}
-                className="animate-pulse"
-              />
-              Consulting Frappe HRMS agents...
+            <div className="agent-loading" role="status" aria-live="polite">
+              <span className="agent-spinner" aria-hidden="true" />
+              <span>{agentStatus || 'Thinking'}</span>
+              <span className="agent-loading-dots" aria-hidden="true">•••</span>
+              <span className="agent-loading-time">{elapsedSeconds}s</span>
             </div>
           )}
           <div ref={messagesEndRef} />

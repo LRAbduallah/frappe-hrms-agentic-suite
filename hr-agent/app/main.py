@@ -13,6 +13,7 @@ from app.mcp.manager import mcp_manager
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper(), logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    force=True,
 )
 logger = logging.getLogger("hr_agent")
 

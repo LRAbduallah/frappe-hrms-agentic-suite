@@ -55,9 +55,15 @@ class HRAgentGovernanceHook(HookProvider):
         logger.info(f"[AUDIT] Completed invocation on {agent_name} in {duration}s")
 
     def on_before_tool_call(self, event: BeforeToolCallEvent) -> None:
-        tool_name = getattr(event.tool_use, "name", "")
-        tool_args = getattr(event.tool_use, "arguments", {})
-        logger.info(f"[AUDIT:TOOL:BEFORE] Tool '{tool_name}' requested with args: {tool_args}")
+        tool_use = event.tool_use or {}
+        tool_name = tool_use.get("name", "")
+        tool_args = tool_use.get("input", {})
+        logger.info(
+            "[AUDIT:TOOL:BEFORE] tool=%s tool_use_id=%s args=%s",
+            tool_name,
+            tool_use.get("toolUseId", ""),
+            tool_args,
+        )
 
         # Enforce disabled tools
         if tool_name in DISABLED_TOOLS:
@@ -77,5 +83,14 @@ class HRAgentGovernanceHook(HookProvider):
             )
 
     def on_after_tool_call(self, event: AfterToolCallEvent) -> None:
-        tool_name = getattr(event.tool_use, "name", "")
-        logger.info(f"[AUDIT:TOOL:AFTER] Tool '{tool_name}' completed.")
+        tool_use = event.tool_use or {}
+        tool_name = tool_use.get("name", "")
+        tool_args = tool_use.get("input", {})
+        result = event.result
+        logger.info(
+            "[AUDIT:TOOL:AFTER] tool=%s tool_use_id=%s args=%s result=%s",
+            tool_name,
+            tool_use.get("toolUseId", ""),
+            tool_args,
+            result,
+        )

@@ -23,8 +23,8 @@ class MCPManager:
             headers = {}
             token = settings.frappe_mcp_bearer_token
             if token:
-                headers["Authorization"] = f"Bearer {token}"
-                logger.info("Configured MCP client with Authorization Bearer header for proxy authentication.")
+                headers["Authorization"] = "Bearer " + token
+                logger.info("Configured MCP client with bearer authentication for proxy access.")
 
             self.client = MCPClient(
                 url=self.url,
@@ -48,8 +48,6 @@ class MCPManager:
             )
             return []
 
-    # ── Tool accessors ─────────────────────────────────────────────────────────
-
     def get_tool(self, name: str) -> Any | None:
         return self._tools_by_name.get(name)
 
@@ -61,9 +59,6 @@ class MCPManager:
         """Return tools whose names appear in `names`, skipping missing ones gracefully."""
         return [self._tools_by_name[n] for n in names if n in self._tools_by_name]
 
-    # ── Per-domain tool subsets ────────────────────────────────────────────────
-
-    # Shared base tools available in several agents
     _CORE = (
         "frappe_get_document",
         "frappe_list_documents",
@@ -74,7 +69,6 @@ class MCPManager:
         "hrms_search_employees",
     )
 
-    # Write/mutation tools (create, amend, submit, cancel)
     _WRITE = (
         "frappe_create_document",
         "frappe_update_document",
@@ -85,9 +79,7 @@ class MCPManager:
     )
 
     def get_tools_for_employee_agent(self) -> list[Any]:
-        return self._pick(
-            *self._CORE,
-        )
+        return self._pick(*self._CORE)
 
     def get_tools_for_leave_agent(self) -> list[Any]:
         return self._pick(
@@ -107,22 +99,13 @@ class MCPManager:
         )
 
     def get_tools_for_expense_agent(self) -> list[Any]:
-        return self._pick(
-            *self._CORE,
-            *self._WRITE,
-        )
+        return self._pick(*self._CORE, *self._WRITE)
 
     def get_tools_for_lifecycle_agent(self) -> list[Any]:
-        return self._pick(
-            *self._CORE,
-            *self._WRITE,
-        )
+        return self._pick(*self._CORE, *self._WRITE)
 
     def get_tools_for_recruitment_agent(self) -> list[Any]:
-        return self._pick(
-            *self._CORE,
-            *self._WRITE,
-        )
+        return self._pick(*self._CORE, *self._WRITE)
 
     def get_tools_for_reporting_agent(self) -> list[Any]:
         return self._pick(

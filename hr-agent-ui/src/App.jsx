@@ -99,6 +99,7 @@ export function App() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [agentStatus, setAgentStatus] = useState('Thinking')
   const [approvals, setApprovals] = useState([])
   const [approvalsLoading, setApprovalsLoading] = useState(false)
   const [showApprovals, setShowApprovals] = useState(true)
@@ -259,22 +260,26 @@ export function App() {
     setMessages([...updatedMessages, assistantMsg])
     setInput('')
     setIsLoading(true)
+    setAgentStatus('Thinking')
 
     await api.sendChat(
       { messages: updatedMessages, stream: true, sessionId },
       (chunk, accumulated) => {
+        setAgentStatus('Writing response')
         setMessages((prev) =>
           prev.map((msg) => (msg.id === assistantMsgId ? { ...msg, content: accumulated } : msg))
         )
       },
       () => {
         setIsLoading(false)
+        setAgentStatus('')
         fetchApprovals()
         // Refresh sessions list so the new session title appears
         fetchSessions()
       },
       (error) => {
         setIsLoading(false)
+        setAgentStatus('')
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === assistantMsgId
@@ -282,7 +287,8 @@ export function App() {
               : msg
           )
         )
-      }
+      },
+      (status) => setAgentStatus(status)
     )
   }
 
@@ -422,6 +428,7 @@ export function App() {
               handleInputChange={handleInputChange}
               handleSubmit={handleSubmit}
               isLoading={isLoading}
+              agentStatus={agentStatus}
               stop={() => setIsLoading(false)}
               onResetChat={handleNewSession}
               onSelectPrompt={(p) => handleSendMessage(p)}
