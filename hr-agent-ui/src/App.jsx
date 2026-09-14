@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { ChatInterface } from './components/ChatInterface'
 import { ApprovalsPanel } from './components/ApprovalsPanel'
+import { WorkflowPanel } from './components/WorkflowPanel'
 import { api } from './api'
-import { Activity, LogOut, Shield, SidebarClose, SidebarOpen, Sparkles } from 'lucide-react'
+import { Activity, GitBranch, LogOut, MessageSquare, Shield, SidebarClose, SidebarOpen, Sparkles } from 'lucide-react'
 
 function LoginScreen({ onLogin }) {
   const [username, setUsername] = useState('')
@@ -104,6 +105,7 @@ export function App() {
   const [approvalsLoading, setApprovalsLoading] = useState(false)
   const [approvalsError, setApprovalsError] = useState('')
   const [showApprovals, setShowApprovals] = useState(true)
+  const [activeWorkspace, setActiveWorkspace] = useState('chat')
   const [statusInfo, setStatusInfo] = useState({
     healthy: true,
     model: 'gpt-4o-mini',
@@ -376,16 +378,40 @@ export function App() {
             <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
               Frappe HRMS Operations
             </span>
-            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>/</span>
-            <span
-              style={{
-                fontSize: '11px',
-                color: 'var(--text-muted)',
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
-              {currentSessionId ? currentSessionId : 'No active session'}
-            </span>
+            <div className="workspace-tabs" role="tablist" aria-label="Workspace">
+              <button
+                className={activeWorkspace === 'chat' ? 'workspace-tab is-active' : 'workspace-tab'}
+                onClick={() => setActiveWorkspace('chat')}
+                role="tab"
+                aria-selected={activeWorkspace === 'chat'}
+              >
+                <MessageSquare size={13} />
+                Chat
+              </button>
+              <button
+                className={activeWorkspace === 'workflow' ? 'workspace-tab is-active' : 'workspace-tab'}
+                onClick={() => setActiveWorkspace('workflow')}
+                role="tab"
+                aria-selected={activeWorkspace === 'workflow'}
+              >
+                <GitBranch size={13} />
+                Workflow
+              </button>
+            </div>
+            {activeWorkspace === 'chat' && (
+              <>
+                <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>/</span>
+                <span
+                  style={{
+                    fontSize: '11px',
+                    color: 'var(--text-muted)',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  {currentSessionId ? currentSessionId : 'No active session'}
+                </span>
+              </>
+            )}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -401,69 +427,90 @@ export function App() {
               <LogOut size={13} />
               <span>Sign out</span>
             </button>
-            <button
-              onClick={() => setShowApprovals(!showApprovals)}
-              className="vercel-btn-secondary"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '4px 10px',
-                fontSize: '12px',
-              }}
-            >
-              <Shield size={13} />
-              <span>Approvals</span>
-              {pendingCount > 0 && (
-                <span
-                  style={{
-                    background: '#f5a623',
-                    color: '#000',
-                    borderRadius: '4px',
-                    padding: '0 5px',
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {pendingCount}
-                </span>
-              )}
-              {showApprovals ? <SidebarClose size={13} /> : <SidebarOpen size={13} />}
-            </button>
+            {activeWorkspace === 'chat' && (
+              <button
+                onClick={() => setShowApprovals(!showApprovals)}
+                className="vercel-btn-secondary"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '4px 10px',
+                  fontSize: '12px',
+                }}
+              >
+                <Shield size={13} />
+                <span>Approvals</span>
+                {pendingCount > 0 && (
+                  <span
+                    style={{
+                      background: '#f5a623',
+                      color: '#000',
+                      borderRadius: '4px',
+                      padding: '0 5px',
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      fontFamily: 'var(--font-mono)',
+                    }}
+                  >
+                    {pendingCount}
+                  </span>
+                )}
+                {showApprovals ? <SidebarClose size={13} /> : <SidebarOpen size={13} />}
+              </button>
+            )}
           </div>
         </div>
 
         {/* Workspace Body */}
         <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-          <div style={{ flex: 1, height: '100%', minWidth: 0 }}>
-            <ChatInterface
-              messages={messages}
-              input={input}
-              handleInputChange={handleInputChange}
-              handleSubmit={handleSubmit}
-              isLoading={isLoading}
-              agentStatus={agentStatus}
-              stop={() => setIsLoading(false)}
-              onResetChat={handleNewSession}
-              onSelectPrompt={(p) => handleSendMessage(p)}
-            />
-          </div>
-
-          {/* Right Approvals Flyout */}
-          {showApprovals && (
-            <div style={{ width: '350px', height: '100%', flexShrink: 0 }}>
-              <ApprovalsPanel
-                approvals={approvals}
-                error={approvalsError}
-                onApprove={handleApprove}
-                onReject={handleReject}
-                onDryRun={handleDryRun}
-                onRefresh={fetchApprovals}
-                loading={approvalsLoading}
+          <div
+            style={{
+              display: activeWorkspace === 'chat' ? 'flex' : 'none',
+              flex: 1,
+              minWidth: 0,
+              overflow: 'hidden',
+            }}
+          >
+            <div style={{ flex: 1, height: '100%', minWidth: 0 }}>
+              <ChatInterface
+                messages={messages}
+                input={input}
+                handleInputChange={handleInputChange}
+                handleSubmit={handleSubmit}
+                isLoading={isLoading}
+                agentStatus={agentStatus}
+                stop={() => setIsLoading(false)}
+                onResetChat={handleNewSession}
+                onSelectPrompt={(p) => handleSendMessage(p)}
               />
             </div>
-          )}
+
+            {/* Right Approvals Flyout */}
+            {showApprovals && (
+              <div style={{ width: '350px', height: '100%', flexShrink: 0 }}>
+                <ApprovalsPanel
+                  approvals={approvals}
+                  error={approvalsError}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                  onDryRun={handleDryRun}
+                  onRefresh={fetchApprovals}
+                  loading={approvalsLoading}
+                />
+              </div>
+            )}
+          </div>
+          <div
+            style={{
+              display: activeWorkspace === 'workflow' ? 'flex' : 'none',
+              flex: 1,
+              minWidth: 0,
+              overflow: 'hidden',
+            }}
+          >
+            <WorkflowPanel />
+          </div>
         </div>
       </div>
     </div>
