@@ -119,6 +119,7 @@ services:
       MCP_EMPLOYEE_QUERY: ${MCP_EMPLOYEE_QUERY:-*}
       DATABASE_URL: mysql+pymysql://${STRANDS_DB_USER:-strands_workflow}:${STRANDS_DB_PASSWORD:?Set STRANDS_DB_PASSWORD in .env}@mariadb:3306/${STRANDS_DB_NAME:-strands_workflow}
       EMAIL_API_BASE_URL: http://strands-hr-workflow:8002
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173}
       WORKFLOW_COOLDOWN_DAYS: ${WORKFLOW_COOLDOWN_DAYS:-0.0}
       LOW_LEAVE_THRESHOLD_DAYS: ${LOW_LEAVE_THRESHOLD_DAYS:-2.0}
       LOW_LEAVE_THRESHOLD_RATIO: ${LOW_LEAVE_THRESHOLD_RATIO:-0.15}
@@ -188,6 +189,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+        VITE_WORKFLOW_API_BASE_URL: ${VITE_WORKFLOW_API_BASE_URL:-}
         VITE_MODEL_NAME: ${VITE_MODEL_NAME:-hr-agent}
     environment:
       AGENT_API_KEY: ${AGENT_API_KEY:?Set AGENT_API_KEY in .env}
