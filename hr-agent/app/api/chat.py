@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 import uuid
 from typing import Any, AsyncGenerator
@@ -14,6 +15,12 @@ from app.memory.session_memory import SessionMemory
 
 router = APIRouter(dependencies=[Depends(require_agent_api_key)])
 logger = logging.getLogger(__name__)
+_PROGRESS_ONLY_RE = re.compile(
+    r"^\s*(?:let me|i(?:'m| am) going to|i(?:'ll| will)|allow me to)\b.*"
+    r"\b(?:finali[sz]e|finish|complete|check|review|look up|investigate)\b"
+    r".*[.!]?\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 class ChatMessage(BaseModel):
@@ -131,6 +138,43 @@ def _final_result_text(result: Any) -> str:
     return "".join(text_parts)
 
 
+def _result_stop_reason(result: Any) -> str | None:
+    metrics = getattr(result, "metrics", None)
+    invocation = getattr(metrics, "latest_agent_invocation", None)
+    reason = getattr(invocation, "stop_reason", None)
+    if reason:
+        return str(reason)
+    if isinstance(result, dict):
+        return result.get("stop_reason")
+    return None
+
+
+def _needs_continuation(result: Any, text: str) -> bool:
+    """Continue only for an interrupted/progress-only answer, not a real question."""
+    if not text.strip():
+        return True
+    if _result_stop_reason(result) in {
+        "limit_turns",
+        "limit_total_tokens",
+        "limit_output_tokens",
+    }:
+        return True
+    stripped = text.strip()
+    if stripped.endswith("?"):
+        return False
+    return bool(_PROGRESS_ONLY_RE.match(stripped))
+
+
+def _continuation_prompt(text: str) -> str:
+    return (
+        "Continue the same request now. Your previous response stopped before completing the work:\n"
+        f"{text[-1200:]}\n\n"
+        "Do not repeat progress narration or say that you will finish later. Use any remaining "
+        "tools, complete every requested action, and then provide the concise final answer. If "
+        "something truly blocks completion, name the exact blocker and the precise user input needed."
+    )
+
+
 async def generate_stream_response(
     prompt: str, model: str, completion_id: str, session_id: str
 ) -> AsyncGenerator[str, None]:
@@ -141,30 +185,49 @@ async def generate_stream_response(
         yield _status_event("Planning your request")
         last_tool_name = None
         emitted_text = False
-        async for event in agent.stream_async(prompt):
-            current_tool = event.get("current_tool_use") if isinstance(event, dict) else None
-            tool_name = current_tool.get("name") if isinstance(current_tool, dict) else None
-            if tool_name and tool_name != last_tool_name:
-                last_tool_name = tool_name
-                yield _status_event(
-                    f"Checking {_friendly_tool_name(tool_name)}",
-                    tool_name,
-                )
-            elif event.get("type") == "tool_result" and last_tool_name:
-                yield _status_event("Reviewing the HRMS result")
+        current_prompt = prompt
+        for continuation in range(settings.completion_continuation_limit + 1):
+            pass_text = ""
+            pass_result = None
+            async for event in agent.stream_async(
+                current_prompt,
+                limits={"turns": settings.agent_turn_limit},
+            ):
+                current_tool = event.get("current_tool_use") if isinstance(event, dict) else None
+                tool_name = current_tool.get("name") if isinstance(current_tool, dict) else None
+                if tool_name and tool_name != last_tool_name:
+                    last_tool_name = tool_name
+                    yield _status_event(
+                        f"Checking {_friendly_tool_name(tool_name)}",
+                        tool_name,
+                    )
+                elif (
+                    isinstance(event, dict)
+                    and event.get("type") == "tool_result"
+                    and last_tool_name
+                ):
+                    yield _status_event("Reviewing the HRMS result")
 
-            text = event.get("data") if isinstance(event, dict) else None
-            if isinstance(text, str) and text:
-                emitted_text = True
-                if last_tool_name:
-                    yield _status_event("Writing response")
-                    last_tool_name = None
-                yield _stream_chunk(text, model, completion_id, created)
-            elif isinstance(event, dict) and not emitted_text and event.get("result") is not None:
-                final_text = _final_result_text(event["result"])
-                if final_text:
+                text = event.get("data") if isinstance(event, dict) else None
+                if isinstance(text, str) and text:
+                    pass_text += text
                     emitted_text = True
-                    yield _stream_chunk(final_text, model, completion_id, created)
+                    if last_tool_name:
+                        yield _status_event("Writing response")
+                        last_tool_name = None
+                    yield _stream_chunk(text, model, completion_id, created)
+                if isinstance(event, dict) and event.get("result") is not None:
+                    pass_result = event["result"]
+
+            if not pass_text and pass_result is not None:
+                pass_text = _final_result_text(pass_result)
+                if pass_text and not emitted_text:
+                    emitted_text = True
+                    yield _stream_chunk(pass_text, model, completion_id, created)
+            if not _needs_continuation(pass_result, pass_text) or continuation >= settings.completion_continuation_limit:
+                break
+            current_prompt = _continuation_prompt(pass_text)
+            yield _status_event("Continuing to complete the request")
     except Exception as exc:
         logger.error(f"Error streaming HR agent response: {exc}", exc_info=True)
         error_text = (
@@ -240,8 +303,20 @@ async def chat_completions(req: ChatCompletionRequest):
     try:
         agent = create_orchestrator(session_id=session_id)
         # Execute agent reasoning over tools and specialists
-        agent_result = agent(last_user_message)
-        response_text = str(agent_result)
+        current_prompt = last_user_message
+        response_text = ""
+        for continuation in range(settings.completion_continuation_limit + 1):
+            agent_result = agent(
+                current_prompt,
+                limits={"turns": settings.agent_turn_limit},
+            )
+            response_text = _final_result_text(agent_result) or str(agent_result)
+            if (
+                not _needs_continuation(agent_result, response_text)
+                or continuation >= settings.completion_continuation_limit
+            ):
+                break
+            current_prompt = _continuation_prompt(response_text)
     except Exception as e:
         logger.error(f"Error executing HR agent: {e}", exc_info=True)
         response_text = (

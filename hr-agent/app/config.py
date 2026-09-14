@@ -44,6 +44,12 @@ class Settings(BaseModel):
     specialist_window_size: int = Field(
         default_factory=lambda: int(os.getenv("SPECIALIST_WINDOW_SIZE", "12"))
     )
+    agent_turn_limit: int = Field(
+        default_factory=lambda: int(os.getenv("AGENT_TURN_LIMIT", "20"))
+    )
+    completion_continuation_limit: int = Field(
+        default_factory=lambda: int(os.getenv("COMPLETION_CONTINUATION_LIMIT", "3"))
+    )
 
     app_env: str = Field(default_factory=lambda: os.getenv("APP_ENV", "development"))
     log_level: str = Field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
