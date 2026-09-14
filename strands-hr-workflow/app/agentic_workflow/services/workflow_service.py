@@ -5,7 +5,6 @@ import uuid
 from typing import Any
 
 from strands import Agent
-from strands.models.mistral import MistralModel
 from strands_tools import http_request
 
 from app.configuration.config import Settings, get_settings
@@ -14,6 +13,7 @@ from app.database.session import get_session_factory
 from app.agentic_workflow.callbacks.workflow_callback_handler import WorkflowCallbackHandler
 from app.agentic_workflow.hooks.workflow_hooks import WorkflowHookProvider
 from app.agentic_workflow.instructions.system_instructions import DRAFT_SYSTEM_PROMPT, WORKFLOW_SYSTEM_PROMPT
+from app.agentic_workflow.model import build_model
 from app.agentic_workflow.schemas.workflow_schemas import (
     EmployeeLeave,
     LeaveEmailDraft,
@@ -79,17 +79,9 @@ def _call_http_tool(method: str, url: str, body: str | None = None) -> Any:
     )
 
 
-def _build_model(settings: Settings) -> MistralModel:
-    return MistralModel(
-        api_key=settings.MISTRAL_API_KEY,
-        client_args={"server_url": settings.MISTRAL_SERVER_URL.strip()},
-        model_id="ministral-3b-2512",
-    )
-
-
 def _build_draft_agent(settings: Settings) -> Agent:
     return Agent(
-        _build_model(settings),
+        build_model(settings),
         system_prompt=DRAFT_SYSTEM_PROMPT,
         callback_handler=WorkflowCallbackHandler(),
         hooks=[WorkflowHookProvider(settings)],

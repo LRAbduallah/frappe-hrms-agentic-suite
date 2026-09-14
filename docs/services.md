@@ -6,7 +6,7 @@
 | --- | --- | ---: | --- |
 | `ui` | React production bundle and same-origin Nginx proxy | 8080 | `hr-agent-ui/` |
 | `strands-api` | OpenAI-compatible FastAPI API and agent orchestration | 8001 | `hr-agent/` |
-| `strands-hr-workflow` | Mistral leave workflow, audit API, and mock email callback | 8002 | `strands-hr-workflow/` |
+| `strands-hr-workflow` | OpenAI-compatible leave workflow, audit API, and mock email callback | 8002 | `strands-hr-workflow/` |
 | `strands-db-init` | Creates the workflow database and least-privilege user | none | `strands-hr-workflow/app/database/bootstrap.py` |
 | `mcp-gateway` | Nginx bearer-token boundary for MCP HTTP | 8800 | `mcp/docker/nginx.conf.template` |
 | `mcp` | MCP tool server for Frappe HRMS | internal 8800 | `mcp/run.py`, `mcp/mcpp/` |

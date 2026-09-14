@@ -3,12 +3,12 @@ import os
 import sys
 
 from strands import Agent, tool
-from strands.models.mistral import MistralModel
 
 from app.configuration.config import Settings, get_settings
 from app.agentic_workflow.callbacks.workflow_callback_handler import WorkflowCallbackHandler
 from app.agentic_workflow.hooks.workflow_hooks import WorkflowHookProvider
 from app.agentic_workflow.instructions.system_instructions import WORKFLOW_SYSTEM_PROMPT
+from app.agentic_workflow.model import build_model
 from app.agentic_workflow.schemas.workflow_schemas import WorkflowSummary
 from app.agentic_workflow.services.workflow_service import trigger_leave_workflow
 from app.agentic_workflow.skills.leave_email_skills import WORKFLOW_SKILLS_PLUGIN
@@ -41,11 +41,7 @@ def run_leave_email_workflow() -> WorkflowSummary:
 
 def build_leave_agent() -> Agent:
     settings = get_settings()
-    model = MistralModel(
-        api_key=settings.MISTRAL_API_KEY,
-        client_args={"server_url": settings.MISTRAL_SERVER_URL.strip()},
-        model_id="ministral-3b-2512",
-    )
+    model = build_model(settings)
 
     agent = Agent(
         model,

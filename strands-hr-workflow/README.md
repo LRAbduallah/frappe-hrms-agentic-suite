@@ -16,10 +16,12 @@ stores its Alembic-managed tables in the dedicated workflow database created by
 
 This repository is an HR Management System built with Strands Agents. Leave
 management is the current scope. The leave agent reads employee
-leave balances through a Frappe HRMS MCP server, drafts leave emails with
-Mistral, and sends or queues those emails for human review. Additional HR
+leave balances through a Frappe HRMS MCP server, drafts leave emails with the
+configured model provider, and sends or queues those emails for human review.
+Additional HR
 management capabilities can be added to the same application as the scope
-expands.
+expands. The workflow uses the same OpenAI-compatible model configuration as
+the main `hr-agent`, including Bedrock Mantle endpoints.
 
 ## Prerequisites
 
@@ -27,14 +29,15 @@ expands.
 - A running Frappe HRMS instance
 - The Frappe HRMS MCP server checked out locally and configured to access that
   Frappe instance
-- A Mistral API key
+- An API key for the configured OpenAI-compatible model provider
 
 Before starting the agent, complete these prerequisite steps in order:
 
 1. Create or select a Frappe user for the MCP integration.
 2. Generate an API key and API secret for that Frappe user.
 3. Add the Frappe URL and generated credentials to the MCP server's `.env`.
-4. Add the Mistral key and MCP URL to this repository's `.env`.
+4. Add the OpenAI-compatible provider settings and MCP URL to this repository's
+   `.env`.
 5. Initialize the SQLite database with the Alembic migration.
 6. Start Frappe, the MCP server, and this repository's API.
 
@@ -63,9 +66,9 @@ FRAPPE_API_KEY=<api-key-generated-for-the-frappe-user>
 FRAPPE_API_SECRET=<api-secret-generated-for-the-frappe-user>
 ```
 
-Do not use the Mistral key as the Frappe API key. They are separate credentials:
-the Frappe key authenticates the MCP server to Frappe, while the Mistral key
-authenticates the agent's language-model requests.
+Do not use the model provider key as the Frappe API key. They are separate
+credentials: the Frappe key authenticates the MCP server to Frappe, while the
+provider key authenticates the agent's language-model requests.
 
 The workflow uses three local services:
 
@@ -134,8 +137,11 @@ Create `.env` in this repository root. The application loads this exact file
 when `app.configuration.config.get_settings()` is called.
 
 ```dotenv
-# Required by the Strands Mistral model
-MISTRAL_API_KEY=<mistral-api-key>
+# OpenAI-compatible model provider. These are shared with the main hr-agent.
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_API_KEY=<provider-api-key>
+# Set this to the Bedrock Mantle OpenAI-compatible endpoint when using Mantle.
+# OPENAI_BASE_URL=https://api.openai.com/v1
 
 # MCP endpoint exposed by the Frappe MCP server
 FRAPPE_MCP_URL=http://localhost:8800/mcp
@@ -156,10 +162,12 @@ BYPASS_TOOL_CONSENT=true
 EMAIL_API_BASE_URL=http://127.0.0.1:8001
 ```
 
-At minimum, replace `<mistral-api-key>` with a valid Mistral API key. The
-Frappe API key and secret do not belong in this file; they belong in the MCP
-server's `.env` shown above. Keep the application `.env` in the repository
-root, next to `requirements.txt`.
+At minimum, replace `<provider-api-key>` with a valid key for the configured
+provider. `OPENAI_BASE_URL` is optional and should be set to the provider's
+OpenAI-compatible `/v1` endpoint when it is not OpenAI itself. The Frappe API
+key and secret do not belong in this file; they belong in the MCP server's
+`.env` shown above. Keep the application `.env` in the repository root, next
+to `requirements.txt`.
 
 `FRAPPE_BASE_URL`, `FRAPPE_API_KEY`, and `FRAPPE_API_SECRET` are intentionally
 not used by this application. They must be configured in the MCP server as
@@ -181,7 +189,7 @@ alembic upgrade head
 allow every run. The example value `15` allows a new leave
 workflow only after 15 full days have elapsed since the latest completed leave
 workflow. A blocked trigger is recorded in the database with status `blocked`,
-and it does not call the MCP server, Mistral, or email API.
+and it does not call the MCP server, the model provider, or email API.
 
 Each completed workflow records its trigger and completion metadata, aggregate
 counts, and one email audit event per employee. Email events include recipient,
@@ -296,8 +304,9 @@ To reject it, use `{"action":"reject"}` instead.
 
 ## Troubleshooting
 
-- **Missing `MISTRAL_API_KEY`**: confirm that `.env` is in the repository root,
-  next to `requirements.txt`.
+- **Missing `OPENAI_API_KEY`**: confirm that `.env` is in the repository root,
+  next to `requirements.txt`, and contains the shared OpenAI-compatible
+  provider settings.
 - **MCP connection refused**: start the Frappe MCP server and confirm that
   `FRAPPE_MCP_URL` points to its `/mcp` endpoint.
 - **Frappe authentication errors**: verify `FRAPPE_BASE_URL`,

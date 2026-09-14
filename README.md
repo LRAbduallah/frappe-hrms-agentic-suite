@@ -44,7 +44,7 @@ guides:
 ├── hr-agent/                # FastAPI + Strands orchestration service
 ├── hr-agent-ui/             # React/Vite web application
 ├── mcp/                     # Frappe HRMS MCP server and local Frappe bootstrap
-└── strands-hr-workflow/     # Mistral-backed leave workflow and audit API
+└── strands-hr-workflow/     # OpenAI-compatible leave workflow and audit API
 ```
 
 ## Run the leave workflow
@@ -53,8 +53,8 @@ The leave workflow uses the existing `mariadb`, `mcp-gateway`, and `frappe`
 services. It stores its audit and chat tables in a separate database on the
 same MariaDB container and calls MCP through the authenticated gateway.
 
-Add `MISTRAL_API_KEY`, `STRANDS_DB_PASSWORD`, and the other required values to
-`.env`, then start the stack and wait for readiness:
+Add the shared `OPENAI_*` settings, `STRANDS_DB_PASSWORD`, and the other
+required values to `.env`, then start the stack and wait for readiness:
 
 ```bash
 docker compose up -d --build --wait
