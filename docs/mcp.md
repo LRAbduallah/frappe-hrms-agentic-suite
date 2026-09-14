@@ -1,0 +1,237 @@
+# MCP and Frappe integration
+
+## Role of the MCP server
+
+MCP (Model Context Protocol) exposes typed tools to the HR agent. The MCP
+server does not store HR data or implement a second permission system; it
+validates input, calls Frappe, and returns structured results.
+
+```mermaid
+flowchart LR
+    Agent[HR agent] -->|Streamable HTTP| MCP[MCP server]
+    MCP -->|Authorization: token key:secret| Frappe[Frappe REST/RPC]
+    Frappe --> DB[(Frappe database)]
+```
+
+## Authentication layers
+
+There are two separate credentials:
+
+1. `MCP_BEARER_TOKEN` protects the Nginx gateway from the agent.
+2. `FRAPPE_API_KEY` and `FRAPPE_API_SECRET` authenticate the MCP server to
+   Frappe using `Authorization: token key:secret`.
+
+Never send Frappe credentials or the MCP token to the browser.
+
+## Modes
+
+| Mode | Available capabilities |
+| --- | --- |
+| `production` | Discovery, reads, creates, updates, HR helpers, submit, cancel, history |
+| `admin` | Production capabilities plus delete and sequential bulk create |
+
+Admin mode does not bypass Frappe permissions and should be limited to controlled
+setup or migration windows.
+
+## Tool groups
+
+| Group | Examples |
+| --- | --- |
+| Discovery | `hrms_list_doctypes`, `frappe_get_api_catalog`, `frappe_get_creation_plan`, `frappe_get_doctype_schema`, `frappe_get_link_options` |
+| Documents | `frappe_list_documents`, `frappe_get_document`, `frappe_create_document`, `frappe_update_document` |
+| Workflow | `frappe_submit_document`, `frappe_cancel_document`, `frappe_get_document_history` |
+| Leave | `hrms_find_employee`, `hrms_get_leave_balance`, `hrms_apply_leave` |
+| Attendance | `hrms_get_attendance`, `hrms_mark_attendance` |
+| Payroll | `hrms_get_salary_slips` |
+| Dataset | `hrms_verify_dataset` |
+
+## Safe write sequence
+
+```text
+1. Discover the DocType.
+2. Read its schema.
+3. Resolve linked values such as Department or Leave Type.
+4. Create or update the document.
+5. Confirm the returned document name and read the document back from Frappe.
+6. Submit separately when required.
+7. Read the result or history for confirmation.
+```
+
+Approval execution is fail-closed: an unavailable MCP gateway, invalid schema
+payload, Frappe error, missing created document name, or failed read-back
+verification marks the approval as `FAILED`; it is never reported as a
+successful or simulated write.
+
+## Schema and dependency map
+
+Before a create or update, call `frappe_get_creation_plan`. It combines the
+installed Frappe DocType metadata with the MCP dependency map and returns:
+
+- required fields, field types, defaults, conditional dependencies, and child tables;
+- the target DocType for every Link field;
+- real current Link values from Frappe, with `choice_required` when multiple
+  values exist;
+- prerequisites and post-create workflow guidance.
+
+The agent must never select the first Company, Employee, Department, Leave Type,
+Currency, Account, or approver silently. It must ask the user to choose among
+multiple current values, and stop with an actionable prerequisite message when
+no valid value exists. The live installed schema is authoritative because field
+requirements vary across Frappe HRMS versions.
+
+When a user explicitly provides a concrete name for a missing prerequisite
+master record, the agent should use `propose_create_workflow` instead of asking
+the user to verify the same value. The workflow is one approval containing
+dependency-ordered create steps, for example:
+
+```json
+[
+  {
+    "id": "department",
+    "doctype": "Department",
+    "fields": {"department_name": "Engineering", "company": "Acme"}
+  },
+  {
+    "id": "designation",
+    "doctype": "Designation",
+    "fields": {"designation_name": "Senior Python Developer"}
+  },
+  {
+    "id": "employee",
+    "doctype": "Employee",
+    "fields": {
+      "employee_name": "Alex Example",
+      "department": {"$ref": "department.name"},
+      "designation": {"$ref": "designation.name"}
+    }
+  }
+]
+```
+
+Each step is validated against its current live schema before the approval is
+created. On approval, steps execute sequentially, each created document is
+read back, and its actual Frappe name replaces later `$ref` values. If a step
+fails, execution stops and the approval records the completed steps and the
+failed step; it is never reported as a successful final document. A missing
+prerequisite is only auto-created when the user clearly requested that named
+record. Ambiguous matches or missing mandatory prerequisite fields still
+produce one grouped clarification question.
+
+## Human-friendly creation behavior
+
+The agent should behave like an HR colleague rather than a form wizard:
+
+- reuse information already provided in the conversation;
+- apply a live default or the only available Link record when that is safe;
+- ask one grouped clarification question containing only missing mandatory
+  details or ambiguous Link choices;
+- avoid optional questions unless the value materially changes the operation;
+- automatically chain clearly requested missing master data through
+  `propose_create_workflow` instead of asking the user to confirm a live lookup;
+- call the proposal tool once after preflight passes;
+- treat the UI approval card as the only confirmation step, not a repeated
+  “shall I proceed?” conversation.
+
+The approval validator deliberately requests the complete live schema even
+though normal agent-facing schema responses are compact. This prevents context
+optimization from rejecting valid optional fields during approval.
+
+For broader API orientation, call `frappe_get_api_catalog` only when the
+DocType relationship map is unknown. Compact mode is the default and returns a
+small field/link map plus the follow-up MCP operation for each relationship.
+Do not load the catalog every turn, and do not paste it into the user-facing
+answer. `frappe_get_creation_plan` remains mandatory immediately before a
+mutation because current records, permissions, and prerequisites can change.
+
+## Context efficiency
+
+Production sessions stay small by:
+
+- discovering tools at startup, then giving each specialist a restricted subset;
+- returning compact JSON from MCP (required/link/select fields, sampled Link options);
+- caching DocType metadata for a short TTL;
+- truncating large tool results and sliding-windowing conversation history;
+- storing a few session facts in working memory instead of replaying MCP dumps.
+
+The curated workflow guidance is based on the official Frappe HR documentation
+and public HRMS DocType definitions, including:
+
+- [Employee](https://docs.frappe.io/hr/employee)
+- [Leave Application](https://docs.frappe.io/hr/leave-application)
+- [Leave Allocation](https://docs.frappe.io/hr/leave-allocation)
+- [Attendance](https://docs.frappe.io/hr/attendance)
+- [Salary Structure Assignment](https://docs.frappe.io/hr/salary-structure-assignment)
+- [Salary Slip](https://docs.frappe.io/hr/salary-slip)
+- [Expense Claim](https://docs.frappe.io/hr/expense-claim)
+- [Job Opening](https://docs.frappe.io/hr/job-opening)
+- [Job Applicant](https://docs.frappe.io/hr/job-applicant)
+- [Employee Transfer](https://docs.frappe.io/hr/employee-transfer)
+- [Employee Promotion](https://docs.frappe.io/hr/employee-promotion)
+
+These references provide workflow guidance only; the running Frappe instance
+remains the source of truth for exact fields, permissions, and available links.
+
+`hrms_apply_leave` creates a Leave Application but does not submit it. Generic
+bulk creation is sequential and is not transactional; earlier records remain if
+a later record fails.
+
+## Transports
+
+### Streamable HTTP
+
+The integrated stack uses:
+
+```text
+HR agent -> http://mcp-gateway:8800/mcp -> mcp:8800
+```
+
+The gateway checks `Authorization: Bearer <MCP_BEARER_TOKEN>`. Put the gateway
+behind TLS and an access-controlled reverse proxy before exposing it publicly.
+
+### Stdio
+
+Desktop MCP clients can launch the server directly:
+
+```bash
+cd mcp
+.venv/bin/python run.py --mode production
+```
+
+Use absolute paths and inject the Frappe environment through the client process
+environment or a protected `.env` file.
+
+## Frappe data flow
+
+```mermaid
+sequenceDiagram
+    participant Tool as MCP tool
+    participant Client as FrappeClient
+    participant API as Frappe API
+    participant Rules as Frappe permissions/workflow
+
+    Tool->>Client: Validated Pydantic input
+    Client->>API: REST resource or whitelisted RPC
+    API->>Rules: Authorize and validate
+    Rules-->>API: Result or error
+    API-->>Client: JSON response
+    Client-->>Tool: Unwrapped data or structured error
+```
+
+## Read-only smoke test
+
+After connecting an MCP client:
+
+1. Call `hrms_list_doctypes`.
+2. Call `frappe_get_doctype_schema` for `Employee`.
+3. Call `frappe_get_link_options` for `Department`.
+4. Call `frappe_list_documents` for `Employee` with `limit: 1`.
+
+Expected results are a registry, Employee metadata, Department options, and
+zero or one Employee record without authentication or permission errors.
+
+## Existing detailed references
+
+The original component references remain useful for implementation-level detail:
+
+- [`mcp/docs/process.md`](../mcp/docs/process.md)
+- [`mcp/docs/setup.md`](../mcp/docs/setup.md)

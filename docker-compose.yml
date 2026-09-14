@@ -1,0 +1,162 @@
+name: frappe-hrms-agentic-suite
+
+services:
+  mariadb:
+    image: mariadb:10.8
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --skip-innodb-read-only-compressed
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in .env}
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [frappe-network]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks: [frappe-network]
+
+  frappe:
+    image: frappe/bench:latest
+    restart: unless-stopped
+    command: ["bash", "/workspace/init.sh"]
+    environment:
+      SHELL: /bin/bash
+      FRAPPE_BIND_ADDR: 0.0.0.0
+      SITE_NAME: ${FRAPPE_SITE_NAME:-hrms.localhost}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in .env}
+      FRAPPE_ADMIN_PASSWORD: ${FRAPPE_ADMIN_PASSWORD:?Set FRAPPE_ADMIN_PASSWORD in .env}
+    working_dir: /home/frappe
+    volumes:
+      - ./mcp/docker:/workspace:ro
+      - frappe-home-data:/home/frappe
+    expose: ["8000", "9000"]
+    ports:
+      - "${FRAPPE_PORT:-8000}:8000"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [frappe-network]
+
+  mcp:
+    build:
+      context: ./mcp
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      FRAPPE_MCP_MODE: production
+      FRAPPE_BASE_URL: http://frappe:8000
+      FRAPPE_API_KEY: ${FRAPPE_API_KEY:?Set FRAPPE_API_KEY in .env}
+      FRAPPE_API_SECRET: ${FRAPPE_API_SECRET:?Set FRAPPE_API_SECRET in .env}
+      FRAPPE_REQUEST_TIMEOUT: ${FRAPPE_REQUEST_TIMEOUT:-30}
+      FRAPPE_SCHEMA_CACHE_TTL: ${FRAPPE_SCHEMA_CACHE_TTL:-300}
+      MCP_MAX_TOOL_RESULT_CHARS: ${MCP_MAX_TOOL_RESULT_CHARS:-12000}
+      MCP_MAX_LIST_ROWS: ${MCP_MAX_LIST_ROWS:-25}
+      MCP_MAX_VALIDATION_SCHEMA_CHARS: ${MCP_MAX_VALIDATION_SCHEMA_CHARS:-100000}
+      PORT: 8800
+    expose: ["8800"]
+    depends_on:
+      frappe:
+        condition: service_started
+    networks: [frappe-network]
+
+  mcp-gateway:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "${MCP_PORT:-8800}:8800"
+    environment:
+      MCP_BEARER_TOKEN: ${MCP_BEARER_TOKEN:?Set MCP_BEARER_TOKEN in .env}
+    volumes:
+      - ./mcp/docker/nginx.conf.template:/etc/nginx/templates/nginx.conf.template:ro
+    depends_on:
+      - mcp
+    networks: [frappe-network]
+
+  strands-api:
+    build:
+      context: ./hr-agent
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in .env}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      AGENT_API_KEY: ${AGENT_API_KEY:?Set AGENT_API_KEY in .env}
+      UI_USERNAME: ${UI_USERNAME:-admin}
+      UI_PASSWORD: ${UI_PASSWORD:?Set UI_PASSWORD in .env}
+      UI_AUTH_SECRET: ${UI_AUTH_SECRET:?Set UI_AUTH_SECRET in .env}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      FRAPPE_MCP_URL: http://mcp-gateway:8800/mcp
+      FRAPPE_MCP_BEARER_TOKEN: ${MCP_BEARER_TOKEN:?Set MCP_BEARER_TOKEN in .env}
+      LOW_LEAVE_THRESHOLD_DAYS: ${LOW_LEAVE_THRESHOLD_DAYS:-2.0}
+      LOW_LEAVE_THRESHOLD_RATIO: ${LOW_LEAVE_THRESHOLD_RATIO:-0.15}
+      HITL_ENABLED: ${HITL_ENABLED:-true}
+      BYPASS_TOOL_CONSENT: ${BYPASS_TOOL_CONSENT:-false}
+      APP_ENV: ${APP_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SESSION_STORAGE_PATH: /data/sessions
+      APPROVALS_STORAGE_PATH: /data/approvals
+      CONVERSATION_WINDOW_SIZE: ${CONVERSATION_WINDOW_SIZE:-20}
+      SPECIALIST_WINDOW_SIZE: ${SPECIALIST_WINDOW_SIZE:-12}
+    volumes:
+      - agent-data:/data
+    expose: ["8001"]
+    ports:
+      - "${AGENT_PORT:-8001}:8001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      mcp-gateway:
+        condition: service_started
+    networks: [frappe-network]
+
+  ui:
+    build:
+      context: ./hr-agent-ui
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+        VITE_MODEL_NAME: ${VITE_MODEL_NAME:-hr-agent}
+    environment:
+      AGENT_API_KEY: ${AGENT_API_KEY:?Set AGENT_API_KEY in .env}
+    restart: unless-stopped
+    ports:
+      - "${UI_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      strands-api:
+        condition: service_healthy
+    networks: [frappe-network]
+
+networks:
+  frappe-network:
+    driver: bridge
+
+volumes:
+  mariadb-data:
+  frappe-home-data:
+  agent-data:

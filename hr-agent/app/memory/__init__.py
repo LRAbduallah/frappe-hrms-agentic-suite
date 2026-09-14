@@ -1,0 +1,1 @@
+"""Compact session working memory."""

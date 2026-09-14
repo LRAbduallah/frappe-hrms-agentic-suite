@@ -1,0 +1,28 @@
+# Git and workspace metadata
+.git
+.gitignore
+.github
+
+# Virtual environments and local caches
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.DS_Store
+
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+
+# Editor and OS noise
+.vscode
+.idea
+
+# Project artifacts not needed for runtime
+README.md
+LICENSE
+
+# Local Docker/compose outputs if present
+*.log
