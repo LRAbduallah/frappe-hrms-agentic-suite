@@ -1,6 +1,7 @@
 
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.api import api_router
@@ -8,10 +9,24 @@ from app.agentic_workflow.services.mcp_service import discover_mcp_tool_names
 from app.configuration.config import get_settings
 from app.database.session import get_session_factory
 
+settings = get_settings()
+allowed_origins = [
+  origin.strip()
+  for origin in settings.CORS_ORIGINS.split(",")
+  if origin.strip()
+]
+
 app = FastAPI(
   title="Strands HR Management System",
   description="HR management APIs with leave management as the current scope.",
   version="1.0.0",
+)
+app.add_middleware(
+  CORSMiddleware,
+  allow_origins=allowed_origins,
+  allow_credentials=True,
+  allow_methods=["*"],
+  allow_headers=["*"],
 )
 app.include_router(api_router)
 
