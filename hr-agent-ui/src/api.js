@@ -2,9 +2,18 @@ const getBaseUrl = () => {
   return import.meta.env.VITE_API_BASE_URL || ''
 }
 
+const getWorkflowBaseUrl = () => {
+  return import.meta.env.VITE_WORKFLOW_API_BASE_URL || ''
+}
+
 const requestOptions = (options = {}) => ({
   ...options,
   credentials: 'include',
+})
+
+const workflowRequestOptions = (options = {}) => requestOptions({
+  cache: 'no-store',
+  ...options,
 })
 
 export const api = {
@@ -201,5 +210,107 @@ export const api = {
       method: 'DELETE',
     }))
     if (!res.ok) throw new Error(`Failed to delete session: ${res.status}`)
+  },
+
+  // ── Leave workflow audit ─────────────────────────────────────────────────
+
+  async listWorkflowRuns({ status, workflowType, limit = 50, offset = 0 } = {}) {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    })
+    if (status) params.set('status', status)
+    if (workflowType) params.set('workflow_type', workflowType)
+
+    const res = await fetch(`${getWorkflowBaseUrl()}/workflows?${params}`, workflowRequestOptions())
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.detail || `Failed to load workflow runs (${res.status})`)
+    return data
+  },
+
+  async triggerWorkflow() {
+    const res = await fetch(`${getWorkflowBaseUrl()}/workflows/trigger`, workflowRequestOptions({
+      method: 'POST',
+    }))
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.detail || `Failed to create workflow run (${res.status})`)
+    return data
+  },
+
+  async getWorkflowRun(runId) {
+    const res = await fetch(
+      `${getWorkflowBaseUrl()}/workflows/${encodeURIComponent(runId)}`,
+      workflowRequestOptions(),
+    )
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.detail || `Failed to load workflow run (${res.status})`)
+    return data
+  },
+
+  async deleteWorkflowRun(runId) {
+    const res = await fetch(
+      `${getWorkflowBaseUrl()}/workflows/${encodeURIComponent(runId)}`,
+      workflowRequestOptions({ method: 'DELETE' }),
+    )
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.detail || `Failed to delete workflow run (${res.status})`)
+    }
+  },
+
+  async listWorkflowEmails(runId, { deliveryStatus, limit = 100, offset = 0, view = 'all' } = {}) {
+    const endpoint = view === 'sent'
+      ? 'sent-emails'
+      : view === 'pending'
+        ? 'pending-emails'
+        : 'emails'
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    })
+    if (deliveryStatus) params.set('delivery_status', deliveryStatus)
+
+    const res = await fetch(
+      `${getWorkflowBaseUrl()}/workflows/${encodeURIComponent(runId)}/${endpoint}?${params}`,
+      workflowRequestOptions(),
+    )
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.detail || `Failed to load workflow emails (${res.status})`)
+    return data
+  },
+
+  async getWorkflowEmail(runId, eventId) {
+    const res = await fetch(
+      `${getWorkflowBaseUrl()}/workflows/${encodeURIComponent(runId)}/emails/${encodeURIComponent(eventId)}`,
+      workflowRequestOptions(),
+    )
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.detail || `Failed to load workflow email (${res.status})`)
+    return data
+  },
+
+  async updateWorkflowEmail(runId, eventId, payload) {
+    const res = await fetch(
+      `${getWorkflowBaseUrl()}/workflows/${encodeURIComponent(runId)}/emails/${encodeURIComponent(eventId)}`,
+      workflowRequestOptions({
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }),
+    )
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.detail || `Failed to update workflow email (${res.status})`)
+    return data
+  },
+
+  async deleteWorkflowEmail(runId, eventId) {
+    const res = await fetch(
+      `${getWorkflowBaseUrl()}/workflows/${encodeURIComponent(runId)}/emails/${encodeURIComponent(eventId)}`,
+      workflowRequestOptions({ method: 'DELETE' }),
+    )
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.detail || `Failed to delete workflow email (${res.status})`)
+    }
   },
 }
