@@ -73,3 +73,8 @@ leave allocation data. It keeps the imported mock email queue behavior; email
 delivery is not sent to an external provider by this migration.
 
 For the system mental model, start with [Architecture](docs/architecture.md).
+
+## Thanks
+
+Thank you to all open-source contributors whose time, ideas, code, and
+feedback help make this project possible.
