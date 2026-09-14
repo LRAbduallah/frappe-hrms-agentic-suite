@@ -6,6 +6,8 @@
 | --- | --- | ---: | --- |
 | `ui` | React production bundle and same-origin Nginx proxy | 8080 | `hr-agent-ui/` |
 | `strands-api` | OpenAI-compatible FastAPI API and agent orchestration | 8001 | `hr-agent/` |
+| `strands-hr-workflow` | Mistral leave workflow, audit API, and mock email callback | 8002 | `strands-hr-workflow/` |
+| `strands-db-init` | Creates the workflow database and least-privilege user | none | `strands-hr-workflow/app/database/bootstrap.py` |
 | `mcp-gateway` | Nginx bearer-token boundary for MCP HTTP | 8800 | `mcp/docker/nginx.conf.template` |
 | `mcp` | MCP tool server for Frappe HRMS | internal 8800 | `mcp/run.py`, `mcp/mcpp/` |
 | `frappe` | Frappe Bench with ERPNext and HRMS | 8000 | `mcp/docker/init.sh` |
@@ -79,3 +81,12 @@
 
 The UI must never receive `OPENAI_API_KEY`, Frappe API credentials, or the MCP
 bearer token.
+
+## Leave workflow API
+
+The migrated workflow exposes the imported FastAPI routes on port `8002`,
+including `POST /workflows/trigger`, `GET /health`, and dependency-aware
+`GET /ready`. It calls `http://mcp-gateway:8800/mcp` with the shared bearer
+token and stores Alembic tables in the dedicated `STRANDS_DB_NAME` database on
+the shared MariaDB service. The imported `/leaves/send_email` route remains a
+mock queue callback for this migration.

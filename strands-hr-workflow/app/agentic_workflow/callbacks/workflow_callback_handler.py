@@ -1,0 +1,4 @@
+from strands.handlers.callback_handler import PrintingCallbackHandler
+
+
+WorkflowCallbackHandler = PrintingCallbackHandler

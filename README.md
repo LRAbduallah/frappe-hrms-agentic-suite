@@ -43,7 +43,33 @@ guides:
 ├── docs/                    # Canonical project documentation
 ├── hr-agent/                # FastAPI + Strands orchestration service
 ├── hr-agent-ui/             # React/Vite web application
-└── mcp/                    # Frappe HRMS MCP server and local Frappe bootstrap
+├── mcp/                     # Frappe HRMS MCP server and local Frappe bootstrap
+└── strands-hr-workflow/     # Mistral-backed leave workflow and audit API
 ```
+
+## Run the leave workflow
+
+The leave workflow uses the existing `mariadb`, `mcp-gateway`, and `frappe`
+services. It stores its audit and chat tables in a separate database on the
+same MariaDB container and calls MCP through the authenticated gateway.
+
+Add `MISTRAL_API_KEY`, `STRANDS_DB_PASSWORD`, and the other required values to
+`.env`, then start the stack and wait for readiness:
+
+```bash
+docker compose up -d --build --wait
+```
+
+The workflow API is available at `http://localhost:8002`. Trigger it with
+`POST /workflows/trigger`, or run the original CLI inside the service:
+
+```bash
+docker compose exec strands-hr-workflow \
+	python app/agentic_workflow/leave_agent.py
+```
+
+The workflow expects existing active Frappe employees with valid email and
+leave allocation data. It keeps the imported mock email queue behavior; email
+delivery is not sent to an external provider by this migration.
 
 For the system mental model, start with [Architecture](docs/architecture.md).

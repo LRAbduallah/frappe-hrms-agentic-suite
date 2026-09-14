@@ -23,7 +23,7 @@ UI (Nginx) -> Strands HR agent -> MCP gateway -> MCP server -> Frappe
 4. Start from the repository root:
 
    ```bash
-   docker compose up -d --build
+   docker compose up -d --build --wait
    docker compose ps
    ```
 
@@ -52,6 +52,13 @@ The Frappe bootstrap credentials only apply when the persistent Frappe volume is
 initialized for the first time. Changing them later does not change existing
 database credentials.
 
+The leave workflow uses the same MariaDB container but a separate database and
+user. Set `MISTRAL_API_KEY`, `STRANDS_DB_PASSWORD`, and `STRANDS_WORKFLOW_PORT`
+in `.env`. `strands-db-init` creates the database before
+`strands-hr-workflow` runs Alembic migrations. The workflow is ready only after
+the database is reachable and the authenticated MCP gateway exposes
+`hrms_find_employee` and `hrms_get_leave_balance`.
+
 ## UI networking
 
 The UI uses an empty `VITE_API_BASE_URL` by default. Nginx proxies `/v1`,
@@ -67,6 +74,7 @@ docker compose up -d ui
 
 ```bash
 docker compose logs -f strands-api
+docker compose logs -f strands-hr-workflow
 docker compose ps
 docker compose pull
 docker compose build

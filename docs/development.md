@@ -84,6 +84,20 @@ curl http://localhost:8080
 For MCP smoke tests, use the read-only sequence documented in
 [MCP integration](mcp.md).
 
+## Run the leave workflow
+
+After the stack is ready, check the workflow dependencies and run the original
+CLI entry point inside its Compose service:
+
+```bash
+curl --fail http://localhost:8002/ready
+docker compose exec strands-hr-workflow \
+	python app/agentic_workflow/leave_agent.py
+```
+
+The workflow requires existing active Frappe employees with valid email and
+leave allocation data. It does not seed or modify Frappe records.
+
 ## Troubleshooting
 
 ### Agent starts but MCP tools are unavailable
