@@ -125,6 +125,7 @@ export function ApprovalsPanel({ approvals, onApprove, onReject, onDryRun, onRef
 
   return (
     <div
+      className="approvals-panel"
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -257,6 +258,7 @@ export function ApprovalsPanel({ approvals, onApprove, onReject, onDryRun, onRef
       >
         {filteredApprovals.length === 0 ? (
           <div
+            className="approvals-empty-state"
             style={{
               textAlign: 'center',
               padding: '48px 12px',

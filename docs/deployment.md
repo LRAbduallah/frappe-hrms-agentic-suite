@@ -52,8 +52,10 @@ The Frappe bootstrap credentials only apply when the persistent Frappe volume is
 initialized for the first time. Changing them later does not change existing
 database credentials.
 
-The leave workflow uses the same MariaDB container but a separate database and
-user. Set `MISTRAL_API_KEY`, `STRANDS_DB_PASSWORD`, and `STRANDS_WORKFLOW_PORT`
+The leave workflow uses the same OpenAI-compatible provider as `strands-api`,
+the same MariaDB container, but a separate database and user. Set
+`OPENAI_MODEL`, `OPENAI_API_KEY`, optional `OPENAI_BASE_URL`,
+`STRANDS_DB_PASSWORD`, and `STRANDS_WORKFLOW_PORT`
 in `.env`. `strands-db-init` creates the database before
 `strands-hr-workflow` runs Alembic migrations. The workflow is ready only after
 the database is reachable and the authenticated MCP gateway exposes

@@ -9,7 +9,7 @@ from app.database.session import get_session_factory
 
 def make_settings(tmp_path: Path) -> Settings:
     return Settings(
-        MISTRAL_API_KEY="test-key",
+        OPENAI_API_KEY="test-key",
         DATABASE_URL=f"sqlite:///{tmp_path / 'chat.db'}",
         CHAT_HISTORY_LIMIT=5,
     )

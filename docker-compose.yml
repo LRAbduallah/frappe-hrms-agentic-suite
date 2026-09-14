@@ -112,8 +112,9 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      MISTRAL_API_KEY: ${MISTRAL_API_KEY:?Set MISTRAL_API_KEY in .env}
-      MISTRAL_SERVER_URL: ${MISTRAL_SERVER_URL:-https://api.mistral.ai}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY in .env}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       MCP_BEARER_TOKEN: ${MCP_BEARER_TOKEN:?Set MCP_BEARER_TOKEN in .env}
       FRAPPE_MCP_URL: ${FRAPPE_MCP_URL:-http://mcp-gateway:8800/mcp}
       MCP_EMPLOYEE_QUERY: ${MCP_EMPLOYEE_QUERY:-*}

@@ -1,0 +1,202 @@
+[
+  {
+    "category": "employee",
+    "title": "Employee Directory",
+    "desc": "List active employees with their departments, roles, and contact details."
+  },
+  {
+    "category": "employee",
+    "title": "Employee Profile",
+    "desc": "Find an employee by name and show their complete HR profile."
+  },
+  {
+    "category": "employee",
+    "title": "Recent Joiners",
+    "desc": "Which employees joined the organization during the last 90 days?"
+  },
+  {
+    "category": "employee",
+    "title": "Reporting Structure",
+    "desc": "Show the reporting structure for a department or team."
+  },
+  {
+    "category": "employee",
+    "title": "Employees on Probation",
+    "desc": "Which employees are currently on probation and when does it end?"
+  },
+  {
+    "category": "employee",
+    "title": "Department Contacts",
+    "desc": "Show the contact details for employees in a selected department."
+  },
+  {
+    "category": "employee",
+    "title": "Birthdays This Month",
+    "desc": "Which employees have birthdays this month?"
+  },
+  {
+    "category": "employee",
+    "title": "Incomplete Profiles",
+    "desc": "Which employee profiles are missing required information?"
+  },
+  {
+    "category": "leave",
+    "title": "Leave Balances",
+    "desc": "Show current leave balances across employees and leave types."
+  },
+  {
+    "category": "leave",
+    "title": "Pending Leave",
+    "desc": "List leave applications that are waiting for approval."
+  },
+  {
+    "category": "leave",
+    "title": "Employees on Leave",
+    "desc": "Which employees are on leave today or during a selected date range?"
+  },
+  {
+    "category": "leave",
+    "title": "Leave by Department",
+    "desc": "Summarize leave taken by each department this month."
+  },
+  {
+    "category": "leave",
+    "title": "Popular Leave Types",
+    "desc": "Which leave types have been used most frequently this year?"
+  },
+  {
+    "category": "leave",
+    "title": "Upcoming Holidays",
+    "desc": "What company holidays are coming up in the next few months?"
+  },
+  {
+    "category": "leave",
+    "title": "Attendance Anomalies",
+    "desc": "Find unusual attendance patterns, missing check-ins, or missing check-outs."
+  },
+  {
+    "category": "leave",
+    "title": "Attendance Trends",
+    "desc": "Show late arrival and absence trends by department."
+  },
+  {
+    "category": "payroll",
+    "title": "Latest Salary Slips",
+    "desc": "Show the latest salary slips and net pay details for employees."
+  },
+  {
+    "category": "payroll",
+    "title": "Payroll by Department",
+    "desc": "Summarize payroll costs by department for the latest payroll period."
+  },
+  {
+    "category": "payroll",
+    "title": "Pending Salary Slips",
+    "desc": "Which salary slips or payroll records are still pending?"
+  },
+  {
+    "category": "payroll",
+    "title": "Salary Structures",
+    "desc": "Show salary structure details and components for an employee or department."
+  },
+  {
+    "category": "payroll",
+    "title": "Current Payroll Entries",
+    "desc": "List payroll entries for the current processing period and their statuses."
+  },
+  {
+    "category": "payroll",
+    "title": "Payroll Comparison",
+    "desc": "Compare payroll totals between the current month and the previous month."
+  },
+  {
+    "category": "payroll",
+    "title": "Bonuses and Advances",
+    "desc": "Which employees received bonuses or salary advances recently?"
+  },
+  {
+    "category": "expense",
+    "title": "Recent Expense Claims",
+    "desc": "Show recent expense claims with amounts, categories, and statuses."
+  },
+  {
+    "category": "expense",
+    "title": "Claims Awaiting Approval",
+    "desc": "Which expense claims are currently waiting for approval?"
+  },
+  {
+    "category": "expense",
+    "title": "Expenses by Category",
+    "desc": "Summarize expense claim totals by category and department."
+  },
+  {
+    "category": "expense",
+    "title": "Travel Expenses",
+    "desc": "Show travel expense trends and the teams with the highest travel costs."
+  },
+  {
+    "category": "expense",
+    "title": "Rejected Claims",
+    "desc": "List rejected expense claims and show the recorded rejection reasons."
+  },
+  {
+    "category": "expense",
+    "title": "Outstanding Advances",
+    "desc": "Which employees have outstanding advances or unsettled expense balances?"
+  },
+  {
+    "category": "recruitment",
+    "title": "Open Positions",
+    "desc": "List open job positions with their departments, locations, and hiring status."
+  },
+  {
+    "category": "recruitment",
+    "title": "Candidate Pipeline",
+    "desc": "Show candidates grouped by their current recruitment stage."
+  },
+  {
+    "category": "recruitment",
+    "title": "Upcoming Interviews",
+    "desc": "Which interviews are scheduled in the next two weeks?"
+  },
+  {
+    "category": "recruitment",
+    "title": "Time to Hire",
+    "desc": "Summarize average time to hire by department or job position."
+  },
+  {
+    "category": "recruitment",
+    "title": "Pending Offers",
+    "desc": "List job offers that are awaiting a candidate response."
+  },
+  {
+    "category": "analytics",
+    "title": "Headcount Summary",
+    "desc": "Give me a headcount summary grouped by department and employment type."
+  },
+  {
+    "category": "analytics",
+    "title": "Leave Utilization",
+    "desc": "Which departments have the highest leave utilization this year?"
+  },
+  {
+    "category": "analytics",
+    "title": "Employee Turnover",
+    "desc": "Summarize employee turnover and separations by month."
+  },
+  {
+    "category": "analytics",
+    "title": "HR Items Needing Attention",
+    "desc": "What HR records, approvals, or tasks currently need attention?"
+  },
+  {
+    "category": "analytics",
+    "title": "Workforce Metrics",
+    "desc": "Compare key workforce metrics between this month and last month."
+  },
+  {
+    "category": "analytics",
+    "title": "Attendance Report",
+    "desc": "Give me an attendance summary with absence and late-arrival patterns."
+  }
+]
