@@ -936,6 +936,387 @@ body {
   }
 }
 
+.app-mobile-menu,
+.app-sidebar-backdrop,
+.app-approvals-backdrop {
+  display: none;
+}
+
+.approvals-empty-state {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: 88px;
+  padding: 20px 12px !important;
+}
+
+/* ─── Responsive application shell ─────────────────────────────────────── */
+@media (max-width: 900px) {
+  .app-shell {
+    flex-direction: column !important;
+    width: 100% !important;
+  }
+
+  .app-sidebar {
+    display: none !important;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 100;
+    width: min(86vw, 300px) !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: none;
+    flex: none;
+    border-right: 0 !important;
+    border-bottom: 0;
+    box-shadow: 18px 0 40px rgba(0, 0, 0, 0.35);
+  }
+
+  .app-sidebar.is-open {
+    display: flex !important;
+  }
+
+  .app-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: rgba(0, 0, 0, 0.58);
+  }
+
+  .sidebar-brand {
+    padding: 10px 14px !important;
+  }
+
+  .sidebar-brand > div:last-child {
+    display: none;
+  }
+
+  .sidebar-sessions {
+    min-height: 0;
+  }
+
+  .sidebar-system,
+  .sidebar-specialists,
+  .sidebar-footer {
+    display: none !important;
+  }
+
+  .app-main {
+    min-height: 0;
+  }
+
+  .app-nav {
+    align-items: center !important;
+    flex-wrap: nowrap;
+    gap: 6px;
+    height: auto !important;
+    min-height: 52px;
+    padding: 8px 12px !important;
+    overflow: hidden;
+  }
+
+  .app-product-title {
+    display: none !important;
+  }
+
+  .app-approval-icon,
+  .app-approvals-label {
+    display: none !important;
+  }
+
+  .app-nav-primary {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+
+  .app-session-id {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .app-nav-actions {
+    flex-shrink: 0;
+    gap: 4px !important;
+  }
+
+  .app-mobile-menu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .app-workspace {
+    min-height: 0;
+  }
+
+  .app-chat-pane {
+    flex-direction: column !important;
+    overflow: auto !important;
+  }
+
+  .app-chat-main {
+    flex: 1 1 auto !important;
+    height: auto !important;
+    min-height: 0;
+  }
+
+  .app-approvals-pane {
+    display: none !important;
+    position: fixed;
+    top: 0;
+    right: 0 !important;
+    bottom: 0;
+    left: auto !important;
+    z-index: 100;
+    width: min(88vw, 380px) !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: none;
+    flex: none;
+    border-left: 1px solid var(--border-subtle) !important;
+    border-top: 0;
+    box-shadow: -18px 0 40px rgba(0, 0, 0, 0.35);
+  }
+
+  .app-approvals-pane.is-open {
+    display: flex !important;
+  }
+
+  .app-approvals-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: rgba(0, 0, 0, 0.58);
+  }
+
+  .app-workflow-pane {
+    min-height: 0;
+  }
+
+  .chat-message-feed {
+    padding: 16px 12px !important;
+  }
+
+  .chat-content {
+    gap: 16px !important;
+    max-width: none !important;
+  }
+
+  .chat-empty-state {
+    min-height: 0 !important;
+    padding: 24px 0 !important;
+  }
+
+  .chat-quick-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .chat-input-shell {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 10px 12px 14px !important;
+  }
+
+  .chat-input-form {
+    align-items: flex-end !important;
+  }
+
+  .chat-composer-textarea {
+    min-height: 29px;
+  }
+
+  .chat-input-footer {
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 9px !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-nav {
+    padding: 8px 10px !important;
+  }
+
+  .app-nav-primary {
+    width: auto;
+    flex: 1 1 auto;
+  }
+
+  .app-nav-primary > span:first-child {
+    display: none;
+  }
+
+  .app-session-separator,
+  .app-session-id {
+    display: none;
+  }
+
+  .app-nav-actions {
+    margin-left: auto;
+  }
+
+  .workspace-tabs {
+    margin-left: 0;
+  }
+
+  .app-nav-actions .app-user-name {
+    display: none;
+  }
+
+  .app-nav-actions .vercel-btn-secondary {
+    width: 32px;
+    height: 32px;
+    justify-content: center;
+    padding: 0 !important;
+  }
+
+  .app-nav-actions .vercel-btn-secondary span {
+    display: none;
+  }
+
+  .workflow-panel {
+    padding: 14px 10px 24px;
+  }
+
+  .workflow-panel-header h1 {
+    font-size: 19px;
+  }
+
+  .workflow-panel-header p {
+    font-size: 12px;
+  }
+
+  .workflow-detail-header h2 {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .workflow-email-card-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .workflow-email-card-meta {
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .workflow-email-actions {
+    flex-wrap: wrap;
+  }
+
+  .workflow-email-actions > button {
+    flex: 1 1 auto;
+  }
+
+  .workflow-email-actions > .icon-button {
+    flex: 0 0 auto;
+  }
+
+  .workflow-email-tabs {
+    max-width: 100%;
+    overflow-x: auto;
+    width: 100%;
+  }
+
+  .workflow-email-tabs button {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 24px 18px;
+  }
+
+  .login-shell {
+    padding: 18px 12px;
+  }
+
+  .login-layout {
+    gap: 26px;
+  }
+
+  .login-welcome h1 {
+    font-size: clamp(34px, 12vw, 48px);
+  }
+
+  .login-intro {
+    font-size: 13px;
+  }
+
+  .workflow-header-actions {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .workflow-loading-status {
+    justify-content: center;
+    order: -1;
+    width: 100%;
+  }
+
+  .workflow-header-actions .workflow-action-button {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .workflow-metrics {
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .workflow-metric {
+    padding: 8px;
+  }
+
+  .workflow-metric-value {
+    font-size: 17px;
+  }
+
+  .workflow-email-list {
+    padding: 10px;
+  }
+
+  .workflow-email-card {
+    padding: 11px;
+  }
+
+  .workflow-email-facts {
+    gap: 7px;
+  }
+
+  .approvals-panel .vercel-btn-primary,
+  .approvals-panel .vercel-btn-secondary {
+    min-height: 32px;
+  }
+}
+
 .agent-loading {
   display: inline-flex;
   align-items: center;

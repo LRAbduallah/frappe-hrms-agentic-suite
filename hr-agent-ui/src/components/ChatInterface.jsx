@@ -17,7 +17,6 @@ import {
   Calendar,
   DollarSign,
   ChevronRight,
-  Sparkles,
   Wallet,
   Plane,
   UserPlus,
@@ -25,6 +24,7 @@ import {
   ClipboardList,
   BarChart3,
 } from 'lucide-react'
+import quickActionCatalog from '../data/quickActions.json'
 
 // ── Capabilities that the agent exposes ──────────────────────────────────────
 const CAPABILITIES = [
@@ -38,48 +38,24 @@ const CAPABILITIES = [
   { icon: <Mail size={12} />, label: 'HR Communications', desc: 'Draft & approve employee notifications' },
 ]
 
-const QUICK_ACTIONS = [
-  {
-    icon: <Sparkles size={13} />,
-    title: 'What can you do?',
-    desc: 'Show me everything you can help with in Frappe HRMS.',
-  },
-  {
-    icon: <Search size={13} />,
-    title: 'Employee Lookup',
-    desc: 'Find employee HR-EMP-00001 and show their full profile.',
-  },
-  {
-    icon: <DollarSign size={13} />,
-    title: 'Generate Salary Slip',
-    desc: 'Create a salary slip for HR-EMP-00001 for September 2026.',
-  },
-  {
-    icon: <Calendar size={13} />,
-    title: 'Apply Leave',
-    desc: 'Submit a casual leave application for HR-EMP-00001 from 2026-09-20 to 2026-09-22.',
-  },
-  {
-    icon: <Wallet size={13} />,
-    title: 'Expense Claim',
-    desc: 'Create an expense claim for HR-EMP-00001 for travel expenses of ₹5,000.',
-  },
-  {
-    icon: <UserPlus size={13} />,
-    title: 'Post Job Opening',
-    desc: 'Create a Job Opening for a Senior Python Developer in the Engineering department.',
-  },
-  {
-    icon: <AlertCircle size={13} />,
-    title: 'Low Leave Alert',
-    desc: 'Which employees have less than 2 days of annual leave remaining?',
-  },
-  {
-    icon: <BarChart3 size={13} />,
-    title: 'HR Report',
-    desc: 'Give me a department headcount summary and attendance anomalies this month.',
-  },
-]
+const QUICK_ACTION_ICONS = {
+  employee: <Search size={13} />,
+  leave: <Calendar size={13} />,
+  payroll: <DollarSign size={13} />,
+  expense: <Wallet size={13} />,
+  recruitment: <UserPlus size={13} />,
+  analytics: <BarChart3 size={13} />,
+}
+
+function getRandomQuickActions() {
+  return [...quickActionCatalog]
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 8)
+    .map((item) => ({
+      ...item,
+      icon: QUICK_ACTION_ICONS[item.category] || <AlertCircle size={13} />,
+    }))
+}
 
 /* ─── Section icon map ──────────────────────────────────── */
 const SECTION_ICONS = {
@@ -520,7 +496,9 @@ export function ChatInterface({
   onSelectPrompt,
 }) {
   const [copiedIndex, setCopiedIndex] = React.useState(null)
+  const [quickActions] = useState(getRandomQuickActions)
   const messagesEndRef = useRef(null)
+  const inputRef = useRef(null)
   const loadingStartedAt = useRef(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
 
@@ -543,6 +521,16 @@ export function ChatInterface({
     return () => window.clearInterval(timer)
   }, [isLoading])
 
+  useEffect(() => {
+    const textarea = inputRef.current
+    if (!textarea) return
+
+    const maxHeight = 3 * 21 + 8
+    textarea.style.height = 'auto'
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`
+  }, [input])
+
   const handleCopy = (text, index) => {
     navigator.clipboard.writeText(text)
     setCopiedIndex(index)
@@ -560,6 +548,7 @@ export function ChatInterface({
 
   return (
     <div
+      className="chat-interface"
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -570,6 +559,7 @@ export function ChatInterface({
     >
       {/* Message Feed */}
       <div
+        className="chat-message-feed"
         style={{
           flex: 1,
           overflowY: 'auto',
@@ -579,9 +569,10 @@ export function ChatInterface({
           alignItems: 'center',
         }}
       >
-        <div style={{ width: '100%', maxWidth: '720px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div className="chat-content" style={{ width: '100%', maxWidth: '720px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {messages.length === 0 ? (
             <div
+              className="chat-empty-state"
               style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -594,6 +585,7 @@ export function ChatInterface({
             >
               {/* Vercel Logo */}
               <div
+                className="chat-quick-actions"
                 style={{
                   width: '36px',
                   height: '36px',
@@ -670,7 +662,7 @@ export function ChatInterface({
                   width: '100%',
                 }}
               >
-                {QUICK_ACTIONS.map((item, idx) => (
+                {quickActions.map((item, idx) => (
                   <button
                     key={idx}
                     onClick={() => onSelectPrompt(item.desc)}
@@ -808,6 +800,7 @@ export function ChatInterface({
 
       {/* Input Bar */}
       <div
+        className="chat-input-shell"
         style={{
           padding: '16px 20px 24px',
           display: 'flex',
@@ -817,6 +810,7 @@ export function ChatInterface({
       >
         <div style={{ width: '100%', maxWidth: '720px' }}>
           <form
+            className="chat-input-form"
             onSubmit={handleSubmit}
             style={{
               display: 'flex',
@@ -831,6 +825,8 @@ export function ChatInterface({
             }}
           >
             <textarea
+              className="chat-composer-textarea"
+              ref={inputRef}
               rows={1}
               placeholder="Ask an HR question, investigate attendance, or propose corrections..."
               value={input}
@@ -846,7 +842,9 @@ export function ChatInterface({
                 color: 'var(--text-primary)',
                 fontFamily: 'var(--font-sans)',
                 fontSize: '13.5px',
-                lineHeight: '20px',
+                lineHeight: '21px',
+                maxHeight: '71px',
+                overflowY: 'hidden',
                 padding: '4px 0',
               }}
             />
@@ -888,6 +886,7 @@ export function ChatInterface({
           </form>
 
           <div
+            className="chat-input-footer"
             style={{
               display: 'flex',
               justifyContent: 'space-between',

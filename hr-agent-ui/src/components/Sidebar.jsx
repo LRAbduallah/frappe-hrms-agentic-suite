@@ -73,6 +73,7 @@ function formatRelativeTime(isoString) {
 }
 
 export function Sidebar({
+  mobileOpen = false,
   statusInfo,
   sessions = [],
   sessionsLoading = false,
@@ -86,6 +87,7 @@ export function Sidebar({
 
   return (
     <div
+      className={`app-sidebar${mobileOpen ? ' is-open' : ''}`}
       style={{
         width: '260px',
         background: 'var(--bg-surface)',
@@ -97,7 +99,7 @@ export function Sidebar({
       }}
     >
       {/* ── Brand Header ─────────────────────────────────────────────────── */}
-      <div
+      <div className="sidebar-brand"
         style={{
           padding: '14px 18px',
           borderBottom: '1px solid var(--border-subtle)',
@@ -136,7 +138,7 @@ export function Sidebar({
       </div>
 
       {/* ── Sessions Panel ────────────────────────────────────────────────── */}
-      <div
+      <div className="sidebar-sessions"
         style={{
           flex: 1,
           display: 'flex',
@@ -328,7 +330,7 @@ export function Sidebar({
       </div>
 
       {/* ── System Status (collapsible) ───────────────────────────────────── */}
-      <div
+      <div className="sidebar-system"
         style={{
           borderBottom: '1px solid var(--border-subtle)',
           flexShrink: 0,
@@ -400,7 +402,7 @@ export function Sidebar({
       </div>
 
       {/* ── Specialists (collapsible) ─────────────────────────────────────── */}
-      <div
+      <div className="sidebar-specialists"
         style={{
           borderBottom: '1px solid var(--border-subtle)',
           flexShrink: 0,
@@ -467,7 +469,7 @@ export function Sidebar({
       </div>
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
-      <div
+      <div className="sidebar-footer"
         style={{
           padding: '12px 18px',
           fontSize: '11px',

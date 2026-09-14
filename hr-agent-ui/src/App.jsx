@@ -4,7 +4,7 @@ import { ChatInterface } from './components/ChatInterface'
 import { ApprovalsPanel } from './components/ApprovalsPanel'
 import { WorkflowPanel } from './components/WorkflowPanel'
 import { api } from './api'
-import { Activity, GitBranch, LogOut, MessageSquare, Shield, SidebarClose, SidebarOpen, Sparkles } from 'lucide-react'
+import { Activity, GitBranch, LogOut, Menu, MessageSquare, Shield, SidebarClose, SidebarOpen, Sparkles, X } from 'lucide-react'
 
 function LoginScreen({ onLogin }) {
   const [username, setUsername] = useState('')
@@ -104,7 +104,10 @@ export function App() {
   const [approvals, setApprovals] = useState([])
   const [approvalsLoading, setApprovalsLoading] = useState(false)
   const [approvalsError, setApprovalsError] = useState('')
-  const [showApprovals, setShowApprovals] = useState(true)
+  const [showApprovals, setShowApprovals] = useState(() => (
+    typeof window === 'undefined' || !window.matchMedia('(max-width: 900px)').matches
+  ))
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false)
   const [activeWorkspace, setActiveWorkspace] = useState('chat')
   const [statusInfo, setStatusInfo] = useState({
     healthy: true,
@@ -152,6 +155,11 @@ export function App() {
     }
   }, [fetchSessions])
 
+  const handleMobileNewSession = useCallback(async () => {
+    setShowMobileSidebar(false)
+    await handleNewSession()
+  }, [handleNewSession])
+
   // ── Resume an existing session ────────────────────────────────────────────
   const handleSessionSelect = useCallback(async (sessionId) => {
     if (sessionId === currentSessionId) return
@@ -169,6 +177,11 @@ export function App() {
       console.error('Load session failed:', e)
     }
   }, [currentSessionId])
+
+  const handleMobileSessionSelect = useCallback(async (sessionId) => {
+    setShowMobileSidebar(false)
+    await handleSessionSelect(sessionId)
+  }, [handleSessionSelect])
 
   // ── Delete a session ──────────────────────────────────────────────────────
   const handleDeleteSession = useCallback(async (sessionId, e) => {
@@ -333,6 +346,7 @@ export function App() {
 
   return (
     <div
+      className="app-shell"
       style={{
         display: 'flex',
         height: '100vh',
@@ -343,17 +357,35 @@ export function App() {
     >
       {/* Left Sidebar */}
       <Sidebar
+        mobileOpen={showMobileSidebar}
         statusInfo={statusInfo}
         sessions={sessions}
         sessionsLoading={sessionsLoading}
         currentSessionId={currentSessionId}
-        onNewSession={handleNewSession}
-        onSessionSelect={handleSessionSelect}
+        onNewSession={handleMobileNewSession}
+        onSessionSelect={handleMobileSessionSelect}
         onDeleteSession={handleDeleteSession}
       />
+      {showMobileSidebar && (
+        <button
+          className="app-sidebar-backdrop"
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setShowMobileSidebar(false)}
+        />
+      )}
+      {showApprovals && activeWorkspace === 'chat' && (
+        <button
+          className="app-approvals-backdrop"
+          type="button"
+          aria-label="Close approvals"
+          onClick={() => setShowApprovals(false)}
+        />
+      )}
 
       {/* Main App */}
       <div
+        className="app-main"
         style={{
           flex: 1,
           display: 'flex',
@@ -364,6 +396,7 @@ export function App() {
       >
         {/* Navigation Bar */}
         <div
+          className="app-nav"
           style={{
             height: '48px',
             borderBottom: '1px solid var(--border-subtle)',
@@ -374,14 +407,26 @@ export function App() {
             background: 'var(--bg-surface)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
+          <div className="app-nav-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              className="app-mobile-menu"
+              type="button"
+              aria-label={showMobileSidebar ? 'Close navigation' : 'Open navigation'}
+              aria-expanded={showMobileSidebar}
+              onClick={() => setShowMobileSidebar((open) => !open)}
+            >
+              {showMobileSidebar ? <X size={16} /> : <Menu size={16} />}
+            </button>
+            <span className="app-product-title" style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
               Frappe HRMS Operations
             </span>
             <div className="workspace-tabs" role="tablist" aria-label="Workspace">
               <button
                 className={activeWorkspace === 'chat' ? 'workspace-tab is-active' : 'workspace-tab'}
-                onClick={() => setActiveWorkspace('chat')}
+                onClick={() => {
+                  setActiveWorkspace('chat')
+                  setShowMobileSidebar(false)
+                }}
                 role="tab"
                 aria-selected={activeWorkspace === 'chat'}
               >
@@ -390,7 +435,10 @@ export function App() {
               </button>
               <button
                 className={activeWorkspace === 'workflow' ? 'workspace-tab is-active' : 'workspace-tab'}
-                onClick={() => setActiveWorkspace('workflow')}
+                onClick={() => {
+                  setActiveWorkspace('workflow')
+                  setShowMobileSidebar(false)
+                }}
                 role="tab"
                 aria-selected={activeWorkspace === 'workflow'}
               >
@@ -400,8 +448,9 @@ export function App() {
             </div>
             {activeWorkspace === 'chat' && (
               <>
-                <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>/</span>
+                <span className="app-session-separator" style={{ color: 'var(--text-muted)', fontSize: '12px' }}>/</span>
                 <span
+                  className="app-session-id"
                   style={{
                     fontSize: '11px',
                     color: 'var(--text-muted)',
@@ -414,8 +463,8 @@ export function App() {
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{user.username}</span>
+          <div className="app-nav-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="app-user-name" style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{user.username}</span>
             <button
               onClick={async () => {
                 await api.logout()
@@ -429,8 +478,11 @@ export function App() {
             </button>
             {activeWorkspace === 'chat' && (
               <button
-                onClick={() => setShowApprovals(!showApprovals)}
-                className="vercel-btn-secondary"
+                onClick={() => {
+                  setShowApprovals((open) => !open)
+                  setShowMobileSidebar(false)
+                }}
+                className="vercel-btn-secondary app-approvals-toggle"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -439,8 +491,8 @@ export function App() {
                   fontSize: '12px',
                 }}
               >
-                <Shield size={13} />
-                <span>Approvals</span>
+                <Shield className="app-approval-icon" size={13} />
+                <span className="app-approvals-label">Approvals</span>
                 {pendingCount > 0 && (
                   <span
                     style={{
@@ -463,8 +515,9 @@ export function App() {
         </div>
 
         {/* Workspace Body */}
-        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        <div className="app-workspace" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
           <div
+            className="app-chat-pane"
             style={{
               display: activeWorkspace === 'chat' ? 'flex' : 'none',
               flex: 1,
@@ -472,7 +525,7 @@ export function App() {
               overflow: 'hidden',
             }}
           >
-            <div style={{ flex: 1, height: '100%', minWidth: 0 }}>
+            <div className="app-chat-main" style={{ flex: 1, height: '100%', minWidth: 0 }}>
               <ChatInterface
                 messages={messages}
                 input={input}
@@ -488,7 +541,7 @@ export function App() {
 
             {/* Right Approvals Flyout */}
             {showApprovals && (
-              <div style={{ width: '350px', height: '100%', flexShrink: 0 }}>
+              <div className="app-approvals-pane is-open" style={{ width: '350px', height: '100%', flexShrink: 0 }}>
                 <ApprovalsPanel
                   approvals={approvals}
                   error={approvalsError}
@@ -502,6 +555,7 @@ export function App() {
             )}
           </div>
           <div
+            className="app-workflow-pane"
             style={{
               display: activeWorkspace === 'workflow' ? 'flex' : 'none',
               flex: 1,
